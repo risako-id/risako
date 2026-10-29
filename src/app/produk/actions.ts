@@ -1,6 +1,6 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { supabase } from "@/lib/supabase";
+import { supabaseServer } from "@/lib/supabase-server";
 
 export async function tambahProduk(fd: FormData) {
   const name = String(fd.get("name") || "").trim();
@@ -8,9 +8,10 @@ export async function tambahProduk(fd: FormData) {
   if (!name || !sku_code) return;
   const qty = Number(fd.get("qty") || 0);
 
-  const { data: p, error } = await supabase.from("products").insert({ name }).select("id").single();
+  const { data: p, error } = await supabaseServer.from("products").insert({ name }).select("id").single();
   if (error || !p) throw new Error(error?.message);
-  const { data: s, error: e2 } = await supabase
+  
+  const { data: s, error: e2 } = await supabaseServer
     .from("skus")
     .insert({
       product_id: p.id,
@@ -22,9 +23,12 @@ export async function tambahProduk(fd: FormData) {
     })
     .select("id")
     .single();
+    
   if (e2 || !s) throw new Error(e2?.message);
+  
   if (qty > 0)
-    await supabase.from("stock_movements").insert({ sku_id: s.id, movement_type: "in", qty_change: qty, note: "Stok awal" });
+    await supabaseServer.from("stock_movements").insert({ sku_id: s.id, movement_type: "in", qty_change: qty, note: "Stok awal" });
+  
   revalidatePath("/produk");
 }
 
@@ -34,9 +38,11 @@ export async function ubahStok(fd: FormData) {
   const raw = Number(fd.get("qty") || 0);
   if (!sku_id || !raw) return;
   const qty_change = jenis === "in" ? Math.abs(raw) : raw; // koreksi boleh minus
-  const { error } = await supabase
+  
+  const { error } = await supabaseServer
     .from("stock_movements")
     .insert({ sku_id, movement_type: jenis, qty_change, note: jenis === "in" ? "Barang masuk" : "Koreksi manual" });
+    
   if (error) throw new Error(error.message);
   revalidatePath("/produk");
 }

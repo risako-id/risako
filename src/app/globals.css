@@ -1,5 +1,5 @@
 * { box-sizing: border-box; }
-body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f6f7f9; color: #333; }
+body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f6f7f9; color: #333; display: flex; min-height: 100vh; }
 h1 { font-size: 1.5rem; margin-bottom: 20px; }
 h2 { font-size: 1.2rem; margin-bottom: 15px; margin-top: 30px; }
 .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
@@ -12,3 +12,36 @@ th { background: #f9f9f9; font-weight: 600; }
 tr:hover { background: #fdfdfd; }
 .grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
 .text-red { color: #d32f2f; font-weight: 600; }
+
+/* --- SIDEBAR & MOBILE LAYOUT --- */
+.sidebar {
+  width: 260px; background: #1a1a1a; color: white; padding: 20px; 
+  display: flex; flex-direction: column; transition: transform 0.3s ease;
+  height: 100vh; position: sticky; top: 0; overflow-y: auto;
+}
+.main-content { flex: 1; padding: 30px; overflow-y: auto; height: 100vh; }
+.mobile-header { display: none; }
+
+/* Tampilan HP (Mobile) */
+@media (max-width: 768px) {
+  body { flex-direction: column; }
+  .sidebar { 
+    position: fixed; top: 0; left: 0; height: 100vh; z-index: 1000; 
+    transform: translateX(-100%); /* Sembunyikan di kiri */
+  }
+  .sidebar.open { transform: translateX(0); /* Munculkan */ }
+  .main-content { padding: 15px; height: auto; }
+  .mobile-header { 
+    display: flex; align-items: center; gap: 15px; background: #1a1a1a; 
+    padding: 15px; position: sticky; top: 0; z-index: 999;
+  }
+  .hamburger-btn { 
+    background: transparent; font-size: 1.5rem; padding: 0; color: white; border: none; 
+  }
+  .overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+    background: rgba(0,0,0,0.5); z-index: 999;
+  }
+  .grid-form { grid-template-columns: 1fr; } /* Form jadi 1 kolom di HP */
+  table { display: block; overflow-x: auto; white-space: nowrap; } /* Tabel bisa digeser */
+}

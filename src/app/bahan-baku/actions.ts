@@ -15,7 +15,7 @@ export async function tambahBahanBaku(fd: FormData) {
     .insert({
       store_id, name,
       unit: String(fd.get("unit") || "").trim(),
-      avg_cost: Number(fd.get("avg_cost") || 0),
+      avg_cost: 0, // <-- Harga default 0, akan diupdate lewat pembelian
       min_stock: Number(fd.get("min_stock") || 0),
     })
     .select("id").single();
@@ -30,21 +30,19 @@ export async function tambahBahanBaku(fd: FormData) {
   revalidatePath("/bahan-baku");
 }
 
+// Fungsi koreksi stok tetap sama
 export async function koreksiStokBahan(fd: FormData) {
   const id = String(fd.get("id"));
   const qty_fisik = Number(fd.get("qty_fisik") || 0);
   const alasan = String(fd.get("alasan") || "").trim();
   if (!id || !alasan) return;
 
-  // 1. Dapatkan stok sistem saat ini
   const { data: rm } = await supabaseServer.from("raw_materials").select("stock_qty").eq("id", id).single();
   if (!rm) throw new Error("Barang tidak ditemukan.");
 
-  // 2. Hitung selisih
   const selisih = qty_fisik - Number(rm.stock_qty);
-  if (selisih === 0) return; // Jika sama, tidak perlu catat
+  if (selisih === 0) return; 
 
-  // 3. Catat ke mutasi (Trigger DB akan mengupdate tabel raw_materials)
   await supabaseServer.from("raw_material_movements").insert({
     raw_material_id: id,
     movement_type: "adjustment",

@@ -54,7 +54,7 @@ export default function Sidebar({ role }: { role: string | null }) {
         <nav style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
           <Link href="/" style={linkStyle("/")}>📊 Dashboard</Link>
 
-          {/* INVENTORI */}
+          {/* MENU INVENTORI */}
           {(isOwner || isProduksi || isPenjualan) && (
             <>
               <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan', '/pembelian'])}>
@@ -72,7 +72,7 @@ export default function Sidebar({ role }: { role: string | null }) {
             </>
           )}
 
-          {/* PRODUKSI */}
+          {/* MENU PRODUKSI */}
           {(isOwner || isProduksi) && (
             <>
               <div onClick={() => toggleMenu('produksi')} style={groupTitleStyle(['/resep', '/produksi', '/validasi'])}>
@@ -89,7 +89,7 @@ export default function Sidebar({ role }: { role: string | null }) {
             </>
           )}
 
-          {/* PENJUALAN */}
+          {/* MENU PENJUALAN */}
           {(isOwner || isPenjualan) && (
             <>
               <div onClick={() => toggleMenu('penjualan')} style={groupTitleStyle(['/kasir', '/pesanan'])}>
@@ -105,17 +105,18 @@ export default function Sidebar({ role }: { role: string | null }) {
             </>
           )}
 
-          {/* KHUSUS OWNER: SDM & KEUANGAN */}
+          {/* MENU KHUSUS OWNER (SDM & KEUANGAN) */}
           {isOwner && (
             <>
               <Link href="/karyawan" style={linkStyle("/karyawan")}>👥 Karyawan</Link>
               
-              <div onClick={() => toggleMenu('keuangan')} style={groupTitleStyle(['/keuangan', '/payroll', '/laporan'])}>
+              <div onClick={() => toggleMenu('keuangan')} style={groupTitleStyle(['/keuangan', '/payroll', '/laporan', '/dompet'])}>
                 <span>💰 Keuangan</span>
                 <span>{openMenus.includes('keuangan') ? '▼' : '▶'}</span>
               </div>
               {openMenus.includes('keuangan') && (
                 <div style={{ marginBottom: '5px' }}>
+                  <Link href="/dompet" style={subLinkStyle("/dompet")}>Dompet & Bank</Link>
                   <Link href="/keuangan" style={subLinkStyle("/keuangan")}>Arus Kas</Link>
                   <Link href="/payroll" style={subLinkStyle("/payroll")}>Rekap Upah</Link>
                   <Link href="/laporan" style={subLinkStyle("/laporan")}>Laporan Laba</Link>

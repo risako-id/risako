@@ -1,13 +1,10 @@
+import FormKoreksiBahan from "./FormKoreksiBahan";
+
 type Row = {
-  id: string;
-  name: string;
-  unit: string;
-  stock_qty: number;
-  min_stock: number;
-  avg_cost: number;
+  id: string; name: string; unit: string; stock_qty: number; min_stock: number; avg_cost: number;
 };
 
-export default function TabelBahanBaku({ rows }: { rows: Row[] }) {
+export default function TabelBahanBaku({ rows, actionKoreksi }: { rows: Row[], actionKoreksi: (fd: FormData) => void }) {
   return (
     <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
       <table>
@@ -28,16 +25,12 @@ export default function TabelBahanBaku({ rows }: { rows: Row[] }) {
               </td>
               <td>Rp {r.avg_cost.toLocaleString('id-ID')} / {r.unit}</td>
               <td>
-                <button style={{ padding: '5px 10px', fontSize: '0.8rem', background: '#555' }}>Edit</button>
+                <FormKoreksiBahan action={actionKoreksi} item={r} />
               </td>
             </tr>
           ))}
           {rows.length === 0 && (
-            <tr>
-              <td colSpan={4} style={{ textAlign: 'center', padding: '20px', color: '#888' }}>
-                Belum ada bahan baku.
-              </td>
-            </tr>
+            <tr><td colSpan={4} style={{ textAlign: 'center', padding: '20px', color: '#888' }}>Belum ada bahan baku.</td></tr>
           )}
         </tbody>
       </table>

@@ -7,16 +7,18 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default async function ProduksiPage() {
-  // AMBIL DATA USER YANG SEDANG LOGIN
   const currentEmployee = await getCurrentEmployee();
   
-  // SATPAM: Hanya Owner dan Produksi
   if (currentEmployee?.role !== "owner" && currentEmployee?.role !== "produksi") redirect("/");
 
   const { data: skusData } = await supabaseServer.from("skus").select("id, sku_code, products(name)");
   const skus = (skusData || []).map(s => ({ id: s.id, name: (s.products as any)?.name, sku_code: s.sku_code }));
 
-  const { data: karyawanData } = await supabaseServer.from("employees").select("id, name").eq("role", "produksi");
+  // PERBAIKAN: Ambil karyawan role 'produksi' DAN 'owner'
+  const { data: karyawanData } = await supabaseServer
+    .from("employees")
+    .select("id, name")
+    .in("role", ["produksi", "owner"]);
 
   const { data: history } = await supabaseServer
     .from("production_orders")

@@ -2,10 +2,16 @@ import { supabaseServer } from "@/lib/supabase-server";
 import { tambahKaryawan } from "./actions";
 import FormKaryawan from "@/components/karyawan/FormKaryawan";
 import TabelKaryawan from "@/components/karyawan/TabelKaryawan";
+import { getCurrentRole } from "@/lib/auth/role";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function KaryawanPage() {
+  // SATPAM: Cek Role
+  const role = await getCurrentRole();
+  if (role !== "owner") redirect("/");
+
   const { data, error } = await supabaseServer
     .from("employees")
     .select("id, name, role, commission_rate")

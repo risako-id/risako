@@ -81,6 +81,7 @@ export default function Sidebar() {
             </div>
           )}
 
+          <Link href="/karyawan" style={linkStyle("/karyawan")}>👥 Karyawan</Link>
           <Link href="/keuangan" style={linkStyle("/keuangan")}>💰 Keuangan</Link>
         </nav>
       </aside>

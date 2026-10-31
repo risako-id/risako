@@ -7,7 +7,7 @@ export async function simulasiPesanan(fd: FormData) {
   const qty = Number(fd.get("qty") || 0);
   if (!sku_id || qty <= 0) return;
 
-  // 1. Ambil data Toko & Platform (TikTok)
+  // 1. Ambil data Toko & Platform
   const { data: store } = await supabaseServer.from("stores").select("id").limit(1).single();
   const { data: platform } = await supabaseServer.from("platforms").select("id").eq("name", "TikTok").single();
   if (!store || !platform) throw new Error("Data master belum siap.");
@@ -20,7 +20,7 @@ export async function simulasiPesanan(fd: FormData) {
       store_id: store.id,
       platform_id: platform.id,
       external_order_id,
-      status: "AWAITING_SHIPMENT",
+      status: "AWAITING_SHIPMENT", // Siap Kirim
       ordered_at: new Date().toISOString(),
     })
     .select("id")
@@ -45,7 +45,7 @@ export async function simulasiPesanan(fd: FormData) {
     .single();
   if (errItem) throw new Error(errItem.message);
 
-  // 5. POTONG STOK PRODUK JADI (Masuk ke stock_movements, trigger DB akan mengurangi)
+  // 5. POTONG STOK PRODUK JADI (Trigger DB akan mengurangi angka stok)
   await supabaseServer.from("stock_movements").insert({
     sku_id: sku_id,
     movement_type: "sale",

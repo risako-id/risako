@@ -1,5 +1,5 @@
 import { supabaseServer } from "@/lib/supabase-server";
-import { tambahKemasan } from "./actions";
+import { tambahKemasan, koreksiStokKemasan } from "./actions";
 import FormKemasan from "@/components/kemasan/FormKemasan";
 import TabelKemasan from "@/components/kemasan/TabelKemasan";
 
@@ -20,7 +20,7 @@ export default async function KemasanPage() {
       <h1>Gudang Kemasan</h1>
       <FormKemasan action={tambahKemasan} />
       <h2>Daftar Kemasan</h2>
-      <TabelKemasan rows={data || []} />
+      <TabelKemasan rows={data || []} actionKoreksi={koreksiStokKemasan} />
     </div>
   );
 }

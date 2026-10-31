@@ -50,7 +50,7 @@ export default function Sidebar() {
         <nav style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
           <Link href="/" style={linkStyle("/")}>📊 Dashboard</Link>
 
-          <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan'])}>
+          <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan', '/pembelian'])}>
             <span>📦 Inventori</span>
             <span>{openMenus.includes('inventori') ? '▼' : '▶'}</span>
           </div>
@@ -59,6 +59,7 @@ export default function Sidebar() {
               <Link href="/produk" style={subLinkStyle("/produk")}>Produk Jadi</Link>
               <Link href="/bahan-baku" style={subLinkStyle("/bahan-baku")}>Bahan Baku</Link>
               <Link href="/kemasan" style={subLinkStyle("/kemasan")}>Kemasan</Link>
+              <Link href="/pembelian" style={subLinkStyle("/pembelian")}>Pembelian</Link>
             </div>
           )}
 

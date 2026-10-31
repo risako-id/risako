@@ -5,12 +5,12 @@ import FormPembelian from "@/components/pembelian/FormPembelian";
 export const dynamic = "force-dynamic";
 
 export default async function PembelianPage() {
-  const [rmRes, pkgRes] = await Promise.all([
+  const [rmRes, pkgRes, cashRes] = await Promise.all([
     supabaseServer.from("raw_materials").select("id, name").order("name"),
     supabaseServer.from("packaging_materials").select("id, name").order("name"),
+    supabaseServer.from("cash_accounts").select("id, name").order("name"),
   ]);
 
-  // Ambil riwayat pembelian
   const { data: history } = await supabaseServer
     .from("purchases")
     .select("*")
@@ -20,7 +20,12 @@ export default async function PembelianPage() {
   return (
     <div>
       <h1>Pembelian Stok</h1>
-      <FormPembelian action={catatPembelian} rawMaterials={rmRes.data || []} packagings={pkgRes.data || []} />
+      <FormPembelian 
+        action={catatPembelian} 
+        rawMaterials={rmRes.data || []} 
+        packagings={pkgRes.data || []} 
+        cashAccounts={cashRes.data || []}
+      />
 
       <h2>Riwayat Pembelian Terakhir</h2>
       <div className="card" style={{ padding: 0 }}>

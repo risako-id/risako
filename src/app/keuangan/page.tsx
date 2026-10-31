@@ -1,21 +1,25 @@
 import { supabaseServer } from "@/lib/supabase-server";
 import { catatOwnerLoan, catatPengeluaran } from "./actions";
 import FormKeuangan from "@/components/keuangan/FormKeuangan";
+import { getCurrentRole } from "@/lib/auth/role";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function KeuanganPage() {
-  // 1. Hitung Total Utang Owner
+  // SATPAM: Cek Role
+  const role = await getCurrentRole();
+  if (role !== "owner") redirect("/");
+
+  // ... (Sisa kode keuangan sama persis seperti sebelumnya)
   const { data: loans } = await supabaseServer.from("owner_loans").select("amount");
   const totalLoan = loans?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
-  // 2. Hitung Total Kas Masuk & Keluar
   const { data: txs } = await supabaseServer.from("cash_transactions").select("type, amount");
   const totalIn = txs?.filter(t => t.type === 'in').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
   const totalOut = txs?.filter(t => t.type === 'out').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
   const saldoKas = totalIn - totalOut;
 
-  // 3. Ambil 10 Riwayat Terakhir
   const { data: history } = await supabaseServer
     .from("cash_transactions")
     .select("*")
@@ -25,8 +29,6 @@ export default async function KeuanganPage() {
   return (
     <div>
       <h1>Keuangan & Kas Toko</h1>
-
-      {/* KARTU RINGKASAN */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
         <div className="card" style={{ borderLeft: '4px solid #1565c0', margin: 0 }}>
           <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>Total Utang ke Owner</p>

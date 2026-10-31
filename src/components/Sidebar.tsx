@@ -37,7 +37,6 @@ export default function Sidebar({ role }: { role: string | null }) {
     marginBottom: '4px', background: isGroupActive(paths) ? '#2a2a2a' : 'transparent'
   });
 
-  // LOGIKA HAK AKSES (ROLE)
   const isOwner = role === "owner";
   const isProduksi = role === "produksi";
   const isPenjualan = role === "penjualan";
@@ -108,6 +107,7 @@ export default function Sidebar({ role }: { role: string | null }) {
               <Link href="/karyawan" style={linkStyle("/karyawan")}>👥 Karyawan</Link>
               <Link href="/payroll" style={linkStyle("/payroll")}>💵 Rekap Upah</Link>
               <Link href="/keuangan" style={linkStyle("/keuangan")}>💰 Keuangan</Link>
+              <Link href="/laporan" style={linkStyle("/laporan")}>📈 Laporan Laba</Link>
             </>
           )}
         </nav>

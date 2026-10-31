@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { logout } from "@/app/login/actions"; // Import fungsi logout
+import { logout } from "@/app/login/actions";
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
@@ -86,10 +86,10 @@ export default function Sidebar() {
           )}
 
           <Link href="/karyawan" style={linkStyle("/karyawan")}>👥 Karyawan</Link>
+          <Link href="/payroll" style={linkStyle("/payroll")}>💵 Rekap Upah</Link>
           <Link href="/keuangan" style={linkStyle("/keuangan")}>💰 Keuangan</Link>
         </nav>
 
-        {/* TOMBOL LOGOUT */}
         <form action={logout} style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #333' }}>
           <button type="submit" style={{ width: '100%', background: '#c62828', color: 'white' }}>
             Logout

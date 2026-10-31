@@ -1,15 +1,17 @@
 import { supabaseServer } from "@/lib/supabase-server";
 import { catatProduksi } from "./actions";
 import FormProduksi from "@/components/produksi/FormProduksi";
-import { getCurrentRole } from "@/lib/auth/role";
+import { getCurrentEmployee } from "@/lib/auth/role";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProduksiPage() {
+  // AMBIL DATA USER YANG SEDANG LOGIN
+  const currentEmployee = await getCurrentEmployee();
+  
   // SATPAM: Hanya Owner dan Produksi
-  const role = await getCurrentRole();
-  if (role !== "owner" && role !== "produksi") redirect("/");
+  if (currentEmployee?.role !== "owner" && currentEmployee?.role !== "produksi") redirect("/");
 
   const { data: skusData } = await supabaseServer.from("skus").select("id, sku_code, products(name)");
   const skus = (skusData || []).map(s => ({ id: s.id, name: (s.products as any)?.name, sku_code: s.sku_code }));
@@ -25,7 +27,12 @@ export default async function ProduksiPage() {
   return (
     <div>
       <h1>Dapur Produksi</h1>
-      <FormProduksi action={catatProduksi} skus={skus} karyawan={karyawanData || []} />
+      <FormProduksi 
+        action={catatProduksi} 
+        skus={skus} 
+        karyawan={karyawanData || []} 
+        currentEmployee={currentEmployee} 
+      />
 
       <h2>Riwayat Produksi Terakhir</h2>
       <div className="card" style={{ padding: 0 }}>

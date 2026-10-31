@@ -9,6 +9,9 @@ export default function Sidebar() {
   const [openMenus, setOpenMenus] = useState<string[]>([]);
   const pathname = usePathname();
 
+  // JIKA DI HALAMAN LOGIN, SEMBUNYIKAN SIDEBAR
+  if (pathname === "/login") return null;
+
   const toggleMenu = (menu: string) => {
     setOpenMenus(prev => 
       prev.includes(menu) ? prev.filter(m => m !== menu) : [...prev, menu]

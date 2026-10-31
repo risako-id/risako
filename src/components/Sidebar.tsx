@@ -59,7 +59,7 @@ export default function Sidebar() {
             </div>
           )}
 
-          <div onClick={() => toggleMenu('produksi')} style={groupTitleStyle(['/resep', '/produksi'])}>
+          <div onClick={() => toggleMenu('produksi')} style={groupTitleStyle(['/resep', '/produksi', '/validasi'])}>
             <span>👨‍🍳 Produksi</span>
             <span>{openMenus.includes('produksi') ? '▼' : '▶'}</span>
           </div>
@@ -67,6 +67,7 @@ export default function Sidebar() {
             <div style={{ marginBottom: '5px' }}>
               <Link href="/resep" style={subLinkStyle("/resep")}>Resep (BOM)</Link>
               <Link href="/produksi" style={subLinkStyle("/produksi")}>Lapor Produksi</Link>
+              <Link href="/validasi" style={subLinkStyle("/validasi")}>Validasi QC</Link>
             </div>
           )}
 

@@ -3,13 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { logout } from "@/app/login/actions"; // Import fungsi logout
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [openMenus, setOpenMenus] = useState<string[]>([]);
   const pathname = usePathname();
 
-  // JIKA DI HALAMAN LOGIN, SEMBUNYIKAN SIDEBAR
   if (pathname === "/login") return null;
 
   const toggleMenu = (menu: string) => {
@@ -44,10 +44,10 @@ export default function Sidebar() {
         <h2 style={{ color: '#fff', margin: 0, fontSize: '1.2rem' }}>Risako ERP</h2>
       </div>
 
-      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+      <aside className={`sidebar ${isOpen ? 'open' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
         <h2 style={{ color: 'white', marginTop: 0, marginBottom: '20px' }}>Risako ERP</h2>
         
-        <nav style={{ display: 'flex', flexDirection: 'column' }}>
+        <nav style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
           <Link href="/" style={linkStyle("/")}>📊 Dashboard</Link>
 
           <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan'])}>
@@ -88,6 +88,13 @@ export default function Sidebar() {
           <Link href="/karyawan" style={linkStyle("/karyawan")}>👥 Karyawan</Link>
           <Link href="/keuangan" style={linkStyle("/keuangan")}>💰 Keuangan</Link>
         </nav>
+
+        {/* TOMBOL LOGOUT */}
+        <form action={logout} style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #333' }}>
+          <button type="submit" style={{ width: '100%', background: '#c62828', color: 'white' }}>
+            Logout
+          </button>
+        </form>
       </aside>
 
       {isOpen && <div className="overlay" onClick={() => setIsOpen(false)} />}

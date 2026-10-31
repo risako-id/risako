@@ -1,11 +1,16 @@
 import { supabaseServer } from "@/lib/supabase-server";
 import { tambahResepBahan, tambahResepKemasan } from "./actions";
 import FormResep from "@/components/resep/FormResep";
+import { getCurrentRole } from "@/lib/auth/role"; // <-- Import Satpam
+import { redirect } from "next/navigation"; // <-- Import Redirect
 
 export const dynamic = "force-dynamic";
 
 export default async function ResepPage() {
-  // Ambil data untuk dropdown
+  // SATPAM: Hanya Owner yang boleh masuk
+  const role = await getCurrentRole();
+  if (role !== "owner") redirect("/");
+
   const [skusRes, rmRes, pkgRes] = await Promise.all([
     supabaseServer.from("skus").select("id, sku_code, products(name)"),
     supabaseServer.from("raw_materials").select("id, name"),

@@ -1,14 +1,19 @@
 import { supabaseServer } from "@/lib/supabase-server";
 import { catatProduksi } from "./actions";
 import FormProduksi from "@/components/produksi/FormProduksi";
+import { getCurrentRole } from "@/lib/auth/role";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProduksiPage() {
+  // SATPAM: Hanya Owner dan Produksi
+  const role = await getCurrentRole();
+  if (role !== "owner" && role !== "produksi") redirect("/");
+
   const { data: skusData } = await supabaseServer.from("skus").select("id, sku_code, products(name)");
   const skus = (skusData || []).map(s => ({ id: s.id, name: (s.products as any)?.name, sku_code: s.sku_code }));
 
-  // Ambil karyawan dengan role 'produksi'
   const { data: karyawanData } = await supabaseServer.from("employees").select("id, name").eq("role", "produksi");
 
   const { data: history } = await supabaseServer

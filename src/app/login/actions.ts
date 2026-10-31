@@ -4,12 +4,15 @@ import { createAuthServerClient } from "@/lib/auth/server";
 import { redirect } from "next/navigation";
 
 export async function login(prevState: any, formData: FormData) {
-  const email = String(formData.get("email") || "").trim();
+  const username = String(formData.get("username") || "").trim().toLowerCase();
   const password = String(formData.get("password") || "").trim();
 
-  if (!email || !password) {
-    return { error: "Email dan password wajib diisi." };
+  if (!username || !password) {
+    return { error: "Username dan password wajib diisi." };
   }
+
+  // TRIK: Ubah username menjadi email fiktif
+  const email = `${username}@risako.local`;
 
   const supabase = await createAuthServerClient();
   
@@ -19,7 +22,7 @@ export async function login(prevState: any, formData: FormData) {
   });
 
   if (error) {
-    return { error: "Email atau password salah." };
+    return { error: "Username atau password salah." };
   }
 
   redirect("/");

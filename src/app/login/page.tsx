@@ -19,7 +19,7 @@ export default function LoginPage() {
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          <input name="email" type="email" placeholder="Email Admin" required style={{ width: '100%' }} />
+          <input name="username" type="text" placeholder="Username (contoh: owner / budi)" required style={{ width: '100%' }} />
           <input name="password" type="password" placeholder="Password" required style={{ width: '100%' }} />
           <button type="submit" disabled={isPending} style={{ width: '100%', marginTop: '10px' }}>
             {isPending ? "Memproses..." : "Masuk"}

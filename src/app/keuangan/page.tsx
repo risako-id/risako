@@ -7,40 +7,50 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export default async function KeuanganPage() {
-  // SATPAM: Cek Role
+  // Satpam: Hanya Owner
   const role = await getCurrentRole();
   if (role !== "owner") redirect("/");
 
-  // ... (Sisa kode keuangan sama persis seperti sebelumnya)
+  // 1. Ambil data dompet untuk dropdown
+  const { data: cashAccounts } = await supabaseServer.from("cash_accounts").select("id, name");
+
+  // 2. Hitung Total Utang Owner
   const { data: loans } = await supabaseServer.from("owner_loans").select("amount");
   const totalLoan = loans?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
 
+  // 3. Hitung Total Kas Gabungan
   const { data: txs } = await supabaseServer.from("cash_transactions").select("type, amount");
   const totalIn = txs?.filter(t => t.type === 'in').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
   const totalOut = txs?.filter(t => t.type === 'out').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
   const saldoKas = totalIn - totalOut;
 
+  // 4. Ambil riwayat transaksi
   const { data: history } = await supabaseServer
     .from("cash_transactions")
-    .select("*")
+    .select("*, cash_accounts(name)")
     .order("created_at", { ascending: false })
     .limit(10);
 
   return (
     <div>
       <h1>Keuangan & Kas Toko</h1>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
         <div className="card" style={{ borderLeft: '4px solid #1565c0', margin: 0 }}>
           <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>Total Utang ke Owner</p>
           <h2 style={{ margin: '5px 0 0 0' }}>Rp {totalLoan.toLocaleString('id-ID')}</h2>
         </div>
         <div className="card" style={{ borderLeft: '4px solid #2e7d32', margin: 0 }}>
-          <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>Saldo Kas Toko (Tunai)</p>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>Total Kas Gabungan</p>
           <h2 style={{ margin: '5px 0 0 0' }}>Rp {saldoKas.toLocaleString('id-ID')}</h2>
         </div>
       </div>
 
-      <FormKeuangan actionLoan={catatOwnerLoan} actionOpex={catatPengeluaran} />
+      <FormKeuangan 
+        actionLoan={catatOwnerLoan} 
+        actionOpex={catatPengeluaran} 
+        cashAccounts={cashAccounts || []} 
+      />
 
       <h2>Riwayat Transaksi Kas Terakhir</h2>
       <div className="card" style={{ padding: 0 }}>
@@ -49,7 +59,7 @@ export default async function KeuanganPage() {
             <tr>
               <th>Tanggal</th>
               <th>Keterangan</th>
-              <th>Kategori</th>
+              <th>Dompet</th>
               <th>Masuk (Rp)</th>
               <th>Keluar (Rp)</th>
             </tr>
@@ -57,9 +67,9 @@ export default async function KeuanganPage() {
           <tbody>
             {history?.map((h) => (
               <tr key={h.id}>
-                <td>{new Date(h.created_at).toLocaleString('id-ID')}</td>
+                <td>{new Date(h.created_at).toLocaleDateString('id-ID')}</td>
                 <td>{h.description}</td>
-                <td><span style={{ fontSize: '0.8rem', background: '#eee', padding: '2px 6px', borderRadius: '4px', textTransform: 'capitalize' }}>{h.category.replace('_', ' ')}</span></td>
+                <td>{(h.cash_accounts as any)?.name || "-"}</td>
                 <td style={{ color: '#2e7d32', fontWeight: 'bold' }}>{h.type === 'in' ? h.amount.toLocaleString('id-ID') : '-'}</td>
                 <td style={{ color: '#c62828', fontWeight: 'bold' }}>{h.type === 'out' ? h.amount.toLocaleString('id-ID') : '-'}</td>
               </tr>

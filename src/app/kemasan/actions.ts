@@ -13,25 +13,41 @@ export async function tambahKemasan(fd: FormData) {
   const { data: pm, error } = await supabaseServer
     .from("packaging_materials")
     .insert({
-      store_id,
-      name,
-      unit: String(fd.get("unit") || "").trim(), // ex: pcs, roll
-      avg_cost: Number(fd.get("avg_cost") || 0),
+      store_id, name,
+      unit: String(fd.get("unit") || "").trim(),
+      avg_cost: 0, // <-- Harga default 0
       min_stock: Number(fd.get("min_stock") || 0),
     })
-    .select("id")
-    .single();
+    .select("id").single();
   if (error) throw new Error(error.message);
 
   const qty = Number(fd.get("stock_qty") || 0);
   if (qty > 0) {
     await supabaseServer.from("packaging_movements").insert({
-      packaging_material_id: pm.id,
-      movement_type: "in",
-      qty_change: qty,
-      note: "Stok awal",
+      packaging_material_id: pm.id, movement_type: "in", qty_change: qty, note: "Stok awal"
     });
   }
+  revalidatePath("/kemasan");
+}
+
+export async function koreksiStokKemasan(fd: FormData) {
+  const id = String(fd.get("id"));
+  const qty_fisik = Number(fd.get("qty_fisik") || 0);
+  const alasan = String(fd.get("alasan") || "").trim();
+  if (!id || !alasan) return;
+
+  const { data: pm } = await supabaseServer.from("packaging_materials").select("stock_qty").eq("id", id).single();
+  if (!pm) throw new Error("Barang tidak ditemukan.");
+
+  const selisih = qty_fisik - Number(pm.stock_qty);
+  if (selisih === 0) return; 
+
+  await supabaseServer.from("packaging_movements").insert({
+    packaging_material_id: id,
+    movement_type: "adjustment",
+    qty_change: selisih,
+    note: `Koreksi Fisik: ${alasan} (Sistem: ${pm.stock_qty} -> Fisik: ${qty_fisik})`
+  });
 
   revalidatePath("/kemasan");
 }

@@ -1,14 +1,18 @@
 import { supabaseServer } from "@/lib/supabase-server";
 import { validasiProduksi } from "./actions";
 import FormValidasi from "@/components/validasi/FormValidasi";
+import { getCurrentRole } from "@/lib/auth/role";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function ValidasiPage() {
-  // Ambil data karyawan dengan role penjualan
+  // SATPAM: Hanya Owner dan Penjualan
+  const role = await getCurrentRole();
+  if (role !== "owner" && role !== "penjualan") redirect("/");
+
   const { data: penjualData } = await supabaseServer.from("employees").select("id, name").eq("role", "penjualan");
   
-  // Ambil produksi yang statusnya masih pending
   const { data: pendingProductions } = await supabaseServer
     .from("production_orders")
     .select("id, qty_produced, note, created_at, products(name)")

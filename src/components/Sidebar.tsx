@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { logout } from "@/app/login/actions";
 
-export default function Sidebar() {
+export default function Sidebar({ role }: { role: string | null }) {
   const [isOpen, setIsOpen] = useState(false);
   const [openMenus, setOpenMenus] = useState<string[]>([]);
   const pathname = usePathname();
@@ -37,6 +37,11 @@ export default function Sidebar() {
     marginBottom: '4px', background: isGroupActive(paths) ? '#2a2a2a' : 'transparent'
   });
 
+  // LOGIKA HAK AKSES (ROLE)
+  const isOwner = role === "owner";
+  const isProduksi = role === "produksi";
+  const isPenjualan = role === "penjualan";
+
   return (
     <>
       <div className="mobile-header">
@@ -50,45 +55,61 @@ export default function Sidebar() {
         <nav style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
           <Link href="/" style={linkStyle("/")}>📊 Dashboard</Link>
 
-          <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan', '/pembelian'])}>
-            <span>📦 Inventori</span>
-            <span>{openMenus.includes('inventori') ? '▼' : '▶'}</span>
-          </div>
-          {openMenus.includes('inventori') && (
-            <div style={{ marginBottom: '5px' }}>
-              <Link href="/produk" style={subLinkStyle("/produk")}>Produk Jadi</Link>
-              <Link href="/bahan-baku" style={subLinkStyle("/bahan-baku")}>Bahan Baku</Link>
-              <Link href="/kemasan" style={subLinkStyle("/kemasan")}>Kemasan</Link>
-              <Link href="/pembelian" style={subLinkStyle("/pembelian")}>Pembelian</Link>
-            </div>
+          {(isOwner || isProduksi || isPenjualan) && (
+            <>
+              <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan', '/pembelian'])}>
+                <span>📦 Inventori</span>
+                <span>{openMenus.includes('inventori') ? '▼' : '▶'}</span>
+              </div>
+              {openMenus.includes('inventori') && (
+                <div style={{ marginBottom: '5px' }}>
+                  <Link href="/produk" style={subLinkStyle("/produk")}>Produk Jadi</Link>
+                  <Link href="/bahan-baku" style={subLinkStyle("/bahan-baku")}>Bahan Baku</Link>
+                  <Link href="/kemasan" style={subLinkStyle("/kemasan")}>Kemasan</Link>
+                  {isOwner && <Link href="/pembelian" style={subLinkStyle("/pembelian")}>Pembelian</Link>}
+                </div>
+              )}
+            </>
           )}
 
-          <div onClick={() => toggleMenu('produksi')} style={groupTitleStyle(['/resep', '/produksi', '/validasi'])}>
-            <span>👨‍🍳 Produksi</span>
-            <span>{openMenus.includes('produksi') ? '▼' : '▶'}</span>
-          </div>
-          {openMenus.includes('produksi') && (
-            <div style={{ marginBottom: '5px' }}>
-              <Link href="/resep" style={subLinkStyle("/resep")}>Resep (BOM)</Link>
-              <Link href="/produksi" style={subLinkStyle("/produksi")}>Lapor Produksi</Link>
-              <Link href="/validasi" style={subLinkStyle("/validasi")}>Validasi QC</Link>
-            </div>
+          {(isOwner || isProduksi) && (
+            <>
+              <div onClick={() => toggleMenu('produksi')} style={groupTitleStyle(['/resep', '/produksi', '/validasi'])}>
+                <span>👨‍🍳 Produksi</span>
+                <span>{openMenus.includes('produksi') ? '▼' : '▶'}</span>
+              </div>
+              {openMenus.includes('produksi') && (
+                <div style={{ marginBottom: '5px' }}>
+                  <Link href="/resep" style={subLinkStyle("/resep")}>Resep (BOM)</Link>
+                  <Link href="/produksi" style={subLinkStyle("/produksi")}>Lapor Produksi</Link>
+                  {(isOwner || isPenjualan) && <Link href="/validasi" style={subLinkStyle("/validasi")}>Validasi QC</Link>}
+                </div>
+              )}
+            </>
           )}
 
-          <div onClick={() => toggleMenu('penjualan')} style={groupTitleStyle(['/kasir', '/pesanan'])}>
-            <span>🛒 Penjualan</span>
-            <span>{openMenus.includes('penjualan') ? '▼' : '▶'}</span>
-          </div>
-          {openMenus.includes('penjualan') && (
-            <div style={{ marginBottom: '5px' }}>
-              <Link href="/pesanan" style={subLinkStyle("/pesanan")}>Pesanan Online</Link>
-              <Link href="/kasir" style={subLinkStyle("/kasir")}>Kasir Offline</Link>
-            </div>
+          {(isOwner || isPenjualan) && (
+            <>
+              <div onClick={() => toggleMenu('penjualan')} style={groupTitleStyle(['/kasir', '/pesanan'])}>
+                <span>🛒 Penjualan</span>
+                <span>{openMenus.includes('penjualan') ? '▼' : '▶'}</span>
+              </div>
+              {openMenus.includes('penjualan') && (
+                <div style={{ marginBottom: '5px' }}>
+                  <Link href="/pesanan" style={subLinkStyle("/pesanan")}>Pesanan Online</Link>
+                  <Link href="/kasir" style={subLinkStyle("/kasir")}>Kasir Offline</Link>
+                </div>
+              )}
+            </>
           )}
 
-          <Link href="/karyawan" style={linkStyle("/karyawan")}>👥 Karyawan</Link>
-          <Link href="/payroll" style={linkStyle("/payroll")}>💵 Rekap Upah</Link>
-          <Link href="/keuangan" style={linkStyle("/keuangan")}>💰 Keuangan</Link>
+          {isOwner && (
+            <>
+              <Link href="/karyawan" style={linkStyle("/karyawan")}>👥 Karyawan</Link>
+              <Link href="/payroll" style={linkStyle("/payroll")}>💵 Rekap Upah</Link>
+              <Link href="/keuangan" style={linkStyle("/keuangan")}>💰 Keuangan</Link>
+            </>
+          )}
         </nav>
 
         <form action={logout} style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #333' }}>

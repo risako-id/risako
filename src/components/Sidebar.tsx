@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(false); // Untuk mobile
-  const [openMenus, setOpenMenus] = useState<string[]>([]); // Untuk sub-menu
+  const [isOpen, setIsOpen] = useState(false);
+  const [openMenus, setOpenMenus] = useState<string[]>([]);
   const pathname = usePathname();
 
   const toggleMenu = (menu: string) => {
@@ -36,20 +36,17 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Tombol Hamburger di HP */}
       <div className="mobile-header">
         <button onClick={() => setIsOpen(!isOpen)} className="hamburger-btn">☰</button>
         <h2 style={{ color: '#fff', margin: 0, fontSize: '1.2rem' }}>Risako ERP</h2>
       </div>
 
-      {/* Sidebar Container */}
       <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
         <h2 style={{ color: 'white', marginTop: 0, marginBottom: '20px' }}>Risako ERP</h2>
         
         <nav style={{ display: 'flex', flexDirection: 'column' }}>
           <Link href="/" style={linkStyle("/")}>📊 Dashboard</Link>
 
-          {/* MENU INVENTORI */}
           <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan'])}>
             <span>📦 Inventori</span>
             <span>{openMenus.includes('inventori') ? '▼' : '▶'}</span>
@@ -62,7 +59,6 @@ export default function Sidebar() {
             </div>
           )}
 
-          {/* MENU PRODUKSI */}
           <div onClick={() => toggleMenu('produksi')} style={groupTitleStyle(['/resep', '/produksi'])}>
             <span>👨‍🍳 Produksi</span>
             <span>{openMenus.includes('produksi') ? '▼' : '▶'}</span>
@@ -74,24 +70,21 @@ export default function Sidebar() {
             </div>
           )}
 
-          {/* MENU PENJUALAN (Placeholder) */}
           <div onClick={() => toggleMenu('penjualan')} style={groupTitleStyle(['/kasir', '/pesanan'])}>
             <span>🛒 Penjualan</span>
             <span>{openMenus.includes('penjualan') ? '▼' : '▶'}</span>
           </div>
           {openMenus.includes('penjualan') && (
             <div style={{ marginBottom: '5px' }}>
-              <Link href="/kasir" style={subLinkStyle("/kasir")}>Kasir Offline</Link>
               <Link href="/pesanan" style={subLinkStyle("/pesanan")}>Pesanan Online</Link>
+              <Link href="/kasir" style={subLinkStyle("/kasir")}>Kasir Offline</Link>
             </div>
           )}
 
-          {/* MENU KEUANGAN */}
           <Link href="/keuangan" style={linkStyle("/keuangan")}>💰 Keuangan</Link>
         </nav>
       </aside>
 
-      {/* Overlay untuk HP saat menu terbuka */}
       {isOpen && <div className="overlay" onClick={() => setIsOpen(false)} />}
     </>
   );

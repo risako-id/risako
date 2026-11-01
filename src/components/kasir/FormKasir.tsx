@@ -1,6 +1,6 @@
 "use client";
 
-export default function FormKasir({ action, skus }: { action: (fd: FormData) => void, skus: any[] }) {
+export default function FormKasir({ action, skus, cashAccounts }: { action: (fd: FormData) => void, skus: any[], cashAccounts: any[] }) {
   return (
     <form action={action} className="card" style={{ borderLeft: '4px solid #1565c0', background: '#f8fbff' }}>
       <h2 style={{ marginTop: 0, color: '#1565c0' }}>🛒 Kasir Offline (POS)</h2>
@@ -19,6 +19,11 @@ export default function FormKasir({ action, skus }: { action: (fd: FormData) => 
         </select>
         
         <input name="qty" type="number" placeholder="Jumlah Beli" required min="1" defaultValue="1" style={{ padding: '12px', fontSize: '1rem' }} />
+
+        <select name="cash_account_id" required style={{ padding: '12px', fontSize: '1rem', border: '2px solid #1565c0' }}>
+          <option value="">-- Uang Masuk ke Dompet Mana? --</option>
+          {cashAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </select>
       </div>
       
       <div style={{ marginTop: '15px' }}>

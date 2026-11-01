@@ -5,16 +5,14 @@ import FormKasir from "@/components/kasir/FormKasir";
 export const dynamic = "force-dynamic";
 
 export default async function KasirPage() {
-  // Ambil SKU dengan harga jualnya
   const { data: skusData } = await supabaseServer.from("skus").select("id, sku_code, sell_price, products(name)");
   const skus = (skusData || []).map(s => ({ 
-    id: s.id, 
-    name: (s.products as any)?.name, 
-    sku_code: s.sku_code,
-    sell_price: s.sell_price
+    id: s.id, name: (s.products as any)?.name, sku_code: s.sku_code, sell_price: s.sell_price
   }));
 
-  // Ambil riwayat transaksi offline
+  // Ambil data dompet
+  const { data: cashAccounts } = await supabaseServer.from("cash_accounts").select("id, name").order("name");
+
   const { data: orders } = await supabaseServer
     .from("orders")
     .select(`
@@ -27,7 +25,7 @@ export default async function KasirPage() {
   return (
     <div>
       <h1>Kasir Offline</h1>
-      <FormKasir action={prosesKasir} skus={skus} />
+      <FormKasir action={prosesKasir} skus={skus} cashAccounts={cashAccounts || []} />
 
       <h2>Riwayat Transaksi Offline Terakhir</h2>
       <div className="card" style={{ padding: 0 }}>

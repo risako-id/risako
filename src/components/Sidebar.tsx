@@ -57,7 +57,7 @@ export default function Sidebar({ role }: { role: string | null }) {
           {/* MENU INVENTORI */}
           {(isOwner || isProduksi || isPenjualan) && (
             <>
-              <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan', '/pembelian'])}>
+              <div onClick={() => toggleMenu('inventori')} style={groupTitleStyle(['/produk', '/bahan-baku', '/kemasan', '/pembelian', '/supplier'])}>
                 <span>📦 Inventori</span>
                 <span>{openMenus.includes('inventori') ? '▼' : '▶'}</span>
               </div>
@@ -66,6 +66,7 @@ export default function Sidebar({ role }: { role: string | null }) {
                   <Link href="/produk" style={subLinkStyle("/produk")}>Produk Jadi</Link>
                   <Link href="/bahan-baku" style={subLinkStyle("/bahan-baku")}>Bahan Baku</Link>
                   <Link href="/kemasan" style={subLinkStyle("/kemasan")}>Kemasan</Link>
+                  {isOwner && <Link href="/supplier" style={subLinkStyle("/supplier")}>Supplier</Link>}
                   {isOwner && <Link href="/pembelian" style={subLinkStyle("/pembelian")}>Pembelian</Link>}
                 </div>
               )}
@@ -105,12 +106,12 @@ export default function Sidebar({ role }: { role: string | null }) {
             </>
           )}
 
-          {/* MENU KHUSUS OWNER (SDM & KEUANGAN) */}
+          {/* MENU KHUSUS OWNER */}
           {isOwner && (
             <>
               <Link href="/karyawan" style={linkStyle("/karyawan")}>👥 Karyawan</Link>
               
-              <div onClick={() => toggleMenu('keuangan')} style={groupTitleStyle(['/keuangan', '/payroll', '/laporan', '/dompet'])}>
+              <div onClick={() => toggleMenu('keuangan')} style={groupTitleStyle(['/keuangan', '/payroll', '/laporan', '/dompet', '/hutang'])}>
                 <span>💰 Keuangan</span>
                 <span>{openMenus.includes('keuangan') ? '▼' : '▶'}</span>
               </div>
@@ -118,6 +119,7 @@ export default function Sidebar({ role }: { role: string | null }) {
                 <div style={{ marginBottom: '5px' }}>
                   <Link href="/dompet" style={subLinkStyle("/dompet")}>Dompet & Bank</Link>
                   <Link href="/keuangan" style={subLinkStyle("/keuangan")}>Arus Kas</Link>
+                  <Link href="/hutang" style={subLinkStyle("/hutang")}>Hutang Supplier</Link>
                   <Link href="/payroll" style={subLinkStyle("/payroll")}>Rekap Upah</Link>
                   <Link href="/laporan" style={subLinkStyle("/laporan")}>Laporan Laba</Link>
                 </div>

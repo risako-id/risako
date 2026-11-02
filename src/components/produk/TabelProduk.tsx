@@ -1,10 +1,8 @@
+import ModalEditProduk from "./ModalEditProduk";
+
 type Row = {
-  id: string;
-  sku_code: string;
-  variant_name: string | null;
-  stock_qty: number;
-  min_stock: number;
-  sell_price: number;
+  id: string; sku_code: string; variant_name: string | null;
+  stock_qty: number; min_stock: number; sell_price: number; cost_price: number;
   products: { name: string } | null;
 };
 
@@ -34,16 +32,12 @@ export default function TabelProduk({ rows }: { rows: Row[] }) {
               </td>
               <td>Rp {r.sell_price.toLocaleString('id-ID')}</td>
               <td>
-                <button style={{ padding: '5px 10px', fontSize: '0.8rem', background: '#555' }}>Edit</button>
+                <ModalEditProduk item={r} />
               </td>
             </tr>
           ))}
           {rows.length === 0 && (
-            <tr>
-              <td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: '#888' }}>
-                Belum ada produk. Silakan tambah produk baru.
-              </td>
-            </tr>
+            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '20px', color: '#888' }}>Belum ada produk.</td></tr>
           )}
         </tbody>
       </table>

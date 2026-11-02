@@ -9,74 +9,65 @@ export async function catatPembelian(fd: FormData) {
   const qty = Number(fd.get("qty") || 0);
   const total_price = Number(fd.get("total_price") || 0);
   const note = String(fd.get("note") || "").trim();
-  
-  const payment_status = String(fd.get("payment_status")); // 'paid' atau 'unpaid'
-  const cash_account_id = String(fd.get("cash_account_id") || ""); // Hanya jika paid
-  const due_date = String(fd.get("due_date") || ""); // Hanya jika unpaid
+  const payment_method = String(fd.get("payment_method")); 
+  const due_date = String(fd.get("due_date") || "");
 
-  if (!item_type || !item_id || !supplier_id || qty <= 0 || total_price <= 0 || !payment_status) return;
+  if (!item_type || !item_id || !supplier_id || qty <= 0 || total_price <= 0 || !payment_method) return;
 
   const { data: store } = await supabaseServer.from("stores").select("id").limit(1).single();
   if (!store) throw new Error("Toko belum disetup.");
 
-  // 1. Catat ke tabel Purchases
+  // 1. Cek tipe dompet yang dipilih
+  const { data: account } = await supabaseServer.from("cash_accounts").select("type").eq("id", payment_method).single();
+  const isKredit = account?.type === "liability";
+
+  // 2. Tentukan status pembayaran
+  // Jika isKredit, tidak ada uang yang keluar dari Kas/Bank. Tapi status transaksi 'paid' (karena barang sudah didapat).
+  // Kita anggap kreditur sudah membayar lunas ke supplier.
+  
   const { data: purchase, error: errPurchase } = await supabaseServer
     .from("purchases")
     .insert({
-      store_id: store.id, 
-      item_type, 
-      item_id, 
-      supplier_id,
-      qty, 
-      total_price, 
-      note: note || "Pembelian Barang",
-      payment_status
+      store_id: store.id, item_type, item_id, supplier_id, qty, total_price,
+      note: note || "Pembelian Barang", payment_status: "paid" 
     })
-    .select("id")
-    .single();
-  
+    .select("id").single();
   if (errPurchase) throw new Error(errPurchase.message);
 
-  // 2. Update Stok & Harga Rata-rata
+  // 3. Update Stok
   const unit_cost = total_price / qty;
   if (item_type === "raw_material") {
-    await supabaseServer.from("raw_material_movements").insert({
-      raw_material_id: item_id, movement_type: "in", qty_change: qty, note: "Pembelian"
-    });
+    await supabaseServer.from("raw_material_movements").insert({ raw_material_id: item_id, movement_type: "in", qty_change: qty, note: "Pembelian" });
     await supabaseServer.from("raw_materials").update({ avg_cost: unit_cost }).eq("id", item_id);
   } else {
-    await supabaseServer.from("packaging_movements").insert({
-      packaging_material_id: item_id, movement_type: "in", qty_change: qty, note: "Pembelian"
-    });
+    await supabaseServer.from("packaging_movements").insert({ packaging_material_id: item_id, movement_type: "in", qty_change: qty, note: "Pembelian" });
     await supabaseServer.from("packaging_materials").update({ avg_cost: unit_cost }).eq("id", item_id);
   }
 
-  // 3. Logika Pembayaran
-  if (payment_status === "paid") {
-    // Jika Lunas: Catat Uang Keluar dari Dompet yang dipilih
-    if (!cash_account_id) throw new Error("Pilih dompet untuk pembayaran lunas.");
-    
+  // 4. Catat Uang / Utang
+  if (isKredit) {
+    // SKENARIO A: Beli pakai Owner Loan / Kredit BCA
+    // Uang Kas Aman. Utang bertambah (trigger DB otomatis menambah saldo dompet liability)
     await supabaseServer.from("cash_transactions").insert({
-      store_id: store.id,
-      cash_account_id,
-      type: "out",
-      category: item_type,
-      amount: total_price,
-      description: `Beli ${note || "barang"} (Lunas)`
+      store_id: store.id, 
+      cash_account_id: payment_method, 
+      type: "out", // 'out' di liability artinya utang bertambah
+      category: "purchase", 
+      amount: total_price, 
+      description: `Beli ${note || "barang"} via Kredit`
     });
+    
+    // Opsional: Jika ada tanggal jatuh tempo, kita juga simpan datanya di masa depan untuk pengingat tagihan kredit.
   } else {
-    // Jika Kredit: Catat ke Hutang Supplier
-    if (!due_date) throw new Error("Pilih tanggal jatuh tempo untuk pembelian kredit.");
-
-    await supabaseServer.from("supplier_debts").insert({
-      store_id: store.id,
-      purchase_id: purchase.id,
-      supplier_id,
-      total_amount: total_price,
-      paid_amount: 0,
-      remaining_amount: total_price,
-      due_date,
-      status: "unpaid"
+    // SKENARIO B: Beli Lunas pakai Kas/Bank
+    // Uang Kas Berkurang (trigger DB otomatis mengurangi saldo dompet aset)
+    await supabaseServer.from("cash_transactions").insert({
+      store_id: store.id, 
+      cash_account_id: payment_method, 
+      type: "out", 
+      category: item_type, 
+      amount: total_price, 
+      description: `Beli ${note || "barang"} via ${isKredit ? 'Kredit' : 'Kas'}`
     });
   }
 
@@ -84,6 +75,4 @@ export async function catatPembelian(fd: FormData) {
   revalidatePath("/bahan-baku");
   revalidatePath("/kemasan");
   revalidatePath("/dompet");
-  revalidatePath("/keuangan");
-  revalidatePath("/hutang");
 }

@@ -8,12 +8,10 @@ export const dynamic = "force-dynamic";
 export default async function ProdukPage() {
   const { data, error } = await supabaseServer
     .from("skus")
-    .select("id, sku_code, variant_name, stock_qty, min_stock, sell_price, products(name)")
+    .select("id, sku_code, variant_name, stock_qty, min_stock, sell_price, cost_price, products(name)")
     .order("created_at", { ascending: false });
 
-  if (error) {
-    return <div className="card text-red">Error mengambil data: {error.message}</div>;
-  }
+  if (error) return <div className="card text-red">Error: {error.message}</div>;
 
   return (
     <div>

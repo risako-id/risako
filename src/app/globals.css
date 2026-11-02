@@ -1,25 +1,107 @@
 * { box-sizing: border-box; }
-body { font-family: system-ui, -apple-system, sans-serif; margin: 0; background: #f6f7f9; color: #333; display: flex; min-height: 100vh; }
-h1 { font-size: 1.5rem; margin-bottom: 20px; }
-h2 { font-size: 1.2rem; margin-bottom: 15px; margin-top: 30px; }
-.card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-input, select, button { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font: inherit; }
-button { background: #1a1a1a; color: #fff; cursor: pointer; border: none; font-weight: 600; }
-button:hover { background: #333; }
-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0; }
-th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
-th { background: #f9f9f9; font-weight: 600; }
-tr:hover { background: #fdfdfd; }
-.grid-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; }
-.text-red { color: #d32f2f; font-weight: 600; }
+body { 
+  font-family: system-ui, -apple-system, sans-serif; 
+  margin: 0; 
+  background: #f4f7f6; /* Warna background lebih lembut */
+  color: #333; 
+  display: flex; 
+  min-height: 100vh; 
+}
+h1 { font-size: 1.6rem; margin-bottom: 20px; color: #1a1a1a; font-weight: 800; }
+h2 { font-size: 1.3rem; margin-bottom: 15px; margin-top: 30px; color: #333; }
+h3 { font-size: 1.1rem; margin-bottom: 10px; }
+
+/* Card & Form */
+.card { 
+  background: #fff; 
+  border: none; 
+  border-radius: 12px; 
+  padding: 25px; 
+  margin-bottom: 20px; 
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05); /* Bayangan lebih halus */
+}
+input, select, button { 
+  padding: 12px; 
+  border: 1px solid #ddd; 
+  border-radius: 8px; 
+  font: inherit; 
+  transition: all 0.2s ease;
+}
+input:focus, select:focus {
+  outline: none;
+  border-color: #1565c0;
+  box-shadow: 0 0 0 3px rgba(21,101,192,0.1);
+}
+button { 
+  background: #1a1a1a; 
+  color: #fff; 
+  cursor: pointer; 
+  border: none; 
+  font-weight: bold; 
+  border-radius: 8px;
+}
+button:hover { background: #333; transform: translateY(-1px); }
+
+/* Tabel Modern */
+table { 
+  width: 100%; 
+  border-collapse: collapse; 
+  background: #fff; 
+  border-radius: 12px; 
+  overflow: hidden; 
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+th { 
+  background: #f8f9fa; 
+  font-weight: 700; 
+  color: #555; 
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+  padding: 15px;
+  text-align: left;
+  border-bottom: 2px solid #eee;
+}
+td { 
+  padding: 15px; 
+  text-align: left; 
+  border-bottom: 1px solid #eee; 
+  vertical-align: middle;
+}
+tr:hover { background: #fbfbfb; }
+
+/* Utility */
+.grid-form { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+  gap: 15px; 
+}
+.text-red { color: #d32f2f; font-weight: bold; }
 
 /* --- SIDEBAR & MOBILE LAYOUT --- */
 .sidebar {
-  width: 260px; background: #1a1a1a; color: white; padding: 20px; 
-  display: flex; flex-direction: column; transition: transform 0.3s ease;
-  height: 100vh; position: sticky; top: 0; overflow-y: auto;
+  width: 260px; 
+  background: #1a1a1a; 
+  color: white; 
+  padding: 20px; 
+  display: flex; 
+  flex-direction: column; 
+  transition: transform 0.3s ease;
+  height: 100vh; 
+  position: sticky; 
+  top: 0; 
+  overflow-y: auto;
+  box-shadow: 4px 0 10px rgba(0,0,0,0.1);
 }
-.main-content { flex: 1; padding: 30px; overflow-y: auto; height: 100vh; }
+.main-content { 
+  flex: 1; 
+  padding: 40px; 
+  overflow-y: auto; 
+  height: 100vh; 
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
 .mobile-header { display: none; }
 
 /* Tampilan HP (Mobile) */
@@ -27,21 +109,22 @@ tr:hover { background: #fdfdfd; }
   body { flex-direction: column; }
   .sidebar { 
     position: fixed; top: 0; left: 0; height: 100vh; z-index: 1000; 
-    transform: translateX(-100%); /* Sembunyikan di kiri */
+    transform: translateX(-100%); 
   }
-  .sidebar.open { transform: translateX(0); /* Munculkan */ }
-  .main-content { padding: 15px; height: auto; }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { padding: 20px 15px; height: auto; }
   .mobile-header { 
     display: flex; align-items: center; gap: 15px; background: #1a1a1a; 
-    padding: 15px; position: sticky; top: 0; z-index: 999;
+    padding: 15px 20px; position: sticky; top: 0; z-index: 999;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   }
   .hamburger-btn { 
-    background: transparent; font-size: 1.5rem; padding: 0; color: white; border: none; 
+    background: transparent; font-size: 1.8rem; padding: 0; color: white; border: none; 
   }
   .overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
     background: rgba(0,0,0,0.5); z-index: 999;
   }
-  .grid-form { grid-template-columns: 1fr; } /* Form jadi 1 kolom di HP */
-  table { display: block; overflow-x: auto; white-space: nowrap; } /* Tabel bisa digeser */
+  .grid-form { grid-template-columns: 1fr; }
+  table { display: block; overflow-x: auto; white-space: nowrap; }
 }

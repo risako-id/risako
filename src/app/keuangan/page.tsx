@@ -1,30 +1,22 @@
 import { supabaseServer } from "@/lib/supabase-server";
-import { catatOwnerLoan, catatPengeluaran } from "./actions";
+import { catatOwnerLoan, catatPengeluaran, bayarOwnerLoan } from "./actions";
 import FormKeuangan from "@/components/keuangan/FormKeuangan";
+import FormBayarOwnerLoan from "@/components/keuangan/FormBayarOwnerLoan";
 import { getCurrentRole } from "@/lib/auth/role";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function KeuanganPage() {
-  // Satpam: Hanya Owner
   const role = await getCurrentRole();
   if (role !== "owner") redirect("/");
 
-  // 1. Ambil data dompet untuk dropdown
-  const { data: cashAccounts } = await supabaseServer.from("cash_accounts").select("id, name");
+  const { data: cashAccounts } = await supabaseServer.from("cash_accounts").select("id, name, type");
 
-  // 2. Hitung Total Utang Owner
-  const { data: loans } = await supabaseServer.from("owner_loans").select("amount");
-  const totalLoan = loans?.reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
+  const { data: accounts } = await supabaseServer.from("cash_accounts").select("*");
+  const totalKas = accounts?.filter(a => a.type !== 'liability').reduce((acc, curr) => acc + Number(curr.balance), 0) || 0;
+  const totalUtang = accounts?.filter(a => a.type === 'liability').reduce((acc, curr) => acc + Number(curr.balance), 0) || 0;
 
-  // 3. Hitung Total Kas Gabungan
-  const { data: txs } = await supabaseServer.from("cash_transactions").select("type, amount");
-  const totalIn = txs?.filter(t => t.type === 'in').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-  const totalOut = txs?.filter(t => t.type === 'out').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-  const saldoKas = totalIn - totalOut;
-
-  // 4. Ambil riwayat transaksi
   const { data: history } = await supabaseServer
     .from("cash_transactions")
     .select("*, cash_accounts(name)")
@@ -37,12 +29,12 @@ export default async function KeuanganPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '20px' }}>
         <div className="card" style={{ borderLeft: '4px solid #1565c0', margin: 0 }}>
-          <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>Total Utang ke Owner</p>
-          <h2 style={{ margin: '5px 0 0 0' }}>Rp {totalLoan.toLocaleString('id-ID')}</h2>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>Total Utang (Owner/Kredit)</p>
+          <h2 style={{ margin: '5px 0 0 0', color: '#c62828' }}>Rp {totalUtang.toLocaleString('id-ID')}</h2>
         </div>
         <div className="card" style={{ borderLeft: '4px solid #2e7d32', margin: 0 }}>
           <p style={{ margin: 0, color: '#666', fontSize: '0.9rem' }}>Total Kas Gabungan</p>
-          <h2 style={{ margin: '5px 0 0 0' }}>Rp {saldoKas.toLocaleString('id-ID')}</h2>
+          <h2 style={{ margin: '5px 0 0 0', color: '#2e7d32' }}>Rp {totalKas.toLocaleString('id-ID')}</h2>
         </div>
       </div>
 
@@ -52,7 +44,12 @@ export default async function KeuanganPage() {
         cashAccounts={cashAccounts || []} 
       />
 
-      <h2>Riwayat Transaksi Kas Terakhir</h2>
+      <FormBayarOwnerLoan 
+        action={bayarOwnerLoan} 
+        cashAccounts={cashAccounts || []} 
+      />
+
+      <h2 style={{ marginTop: '30px' }}>Riwayat Transaksi Kas Terakhir</h2>
       <div className="card" style={{ padding: 0 }}>
         <table>
           <thead>
@@ -74,9 +71,6 @@ export default async function KeuanganPage() {
                 <td style={{ color: '#c62828', fontWeight: 'bold' }}>{h.type === 'out' ? h.amount.toLocaleString('id-ID') : '-'}</td>
               </tr>
             ))}
-            {(!history || history.length === 0) && (
-              <tr><td colSpan={5} style={{ textAlign: 'center', color: '#888' }}>Belum ada transaksi kas.</td></tr>
-            )}
           </tbody>
         </table>
       </div>

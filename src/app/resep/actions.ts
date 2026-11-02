@@ -19,13 +19,9 @@ export async function simpanResepBahan(fd: FormData) {
   }
 
   if (inserts.length > 0) {
-    // Hapus resep lama untuk SKU ini jika ada (opsional, atau gunakan upsert)
-    // await supabaseServer.from("recipes").delete().eq("sku_id", sku_id);
-    
     const { error } = await supabaseServer.from("recipes").insert(inserts);
     if (error) throw new Error(error.message);
   }
-
   revalidatePath("/resep");
 }
 
@@ -49,6 +45,15 @@ export async function simpanResepKemasan(fd: FormData) {
     const { error } = await supabaseServer.from("recipe_packagings").insert(inserts);
     if (error) throw new Error(error.message);
   }
+  revalidatePath("/resep");
+}
 
+export async function hapusResepBahan(id: string) {
+  await supabaseServer.from("recipes").delete().eq("id", id);
+  revalidatePath("/resep");
+}
+
+export async function hapusResepKemasan(id: string) {
+  await supabaseServer.from("recipe_packagings").delete().eq("id", id);
   revalidatePath("/resep");
 }

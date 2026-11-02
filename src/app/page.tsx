@@ -7,11 +7,10 @@ export const dynamic = "force-dynamic";
 export default async function Dashboard() {
   const currentEmployee = await getCurrentEmployee();
 
-  // 1. Ambil Data Kas
-  const { data: txs } = await supabaseServer.from("cash_transactions").select("type, amount");
-  const totalIn = txs?.filter(t => t.type === 'in').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-  const totalOut = txs?.filter(t => t.type === 'out').reduce((acc, curr) => acc + Number(curr.amount), 0) || 0;
-  const saldoKas = totalIn - totalOut;
+  // 1. Ambil Data Dompet (Aset & Utang)
+  const { data: accounts } = await supabaseServer.from("cash_accounts").select("type, balance");
+  const totalKas = accounts?.filter(a => a.type !== 'liability').reduce((acc, curr) => acc + Number(curr.balance), 0) || 0;
+  const totalUtang = accounts?.filter(a => a.type === 'liability').reduce((acc, curr) => acc + Number(curr.balance), 0) || 0;
 
   // 2. Ambil Data Stok Menipis (Bahan Baku, Kemasan, Produk)
   const [rmRes, pkgRes, skuRes] = await Promise.all([
@@ -39,13 +38,19 @@ export default async function Dashboard() {
       </h1>
       <p style={{ color: '#666', marginTop: '-10px', marginBottom: '30px' }}>Ini adalah ringkasan toko Anda hari ini.</p>
 
-      {/* WIDGET RINGKASAN */}
+      {/* KARTU RINGKASAN */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px', marginBottom: '30px' }}>
         
-        {/* KARTU KAS */}
+        {/* KARTU UANG FISIK */}
         <div className="card" style={{ borderLeft: '4px solid #2e7d32', margin: 0 }}>
-          <p style={{ margin: 0, color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>Saldo Kas Toko</p>
-          <h2 style={{ margin: '10px 0 0 0', fontSize: '2rem', color: '#2e7d32' }}>Rp {saldoKas.toLocaleString('id-ID')}</h2>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>Total Uang Fisik (Kas/Bank)</p>
+          <h2 style={{ margin: '10px 0 0 0', fontSize: '2rem', color: '#2e7d32' }}>Rp {totalKas.toLocaleString('id-ID')}</h2>
+        </div>
+
+        {/* KARTU TOTAL UTANG */}
+        <div className="card" style={{ borderLeft: '4px solid #c62828', margin: 0 }}>
+          <p style={{ margin: 0, color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>Total Utang (Owner/Kredit)</p>
+          <h2 style={{ margin: '10px 0 0 0', fontSize: '2rem', color: '#c62828' }}>Rp {totalUtang.toLocaleString('id-ID')}</h2>
         </div>
 
         {/* KARTU PRODUKSI PENDING */}
@@ -55,9 +60,9 @@ export default async function Dashboard() {
         </div>
 
         {/* KARTU STOK MENIPIS */}
-        <div className="card" style={{ borderLeft: '4px solid #c62828', margin: 0 }}>
+        <div className="card" style={{ borderLeft: '4px solid #d32f2f', margin: 0 }}>
           <p style={{ margin: 0, color: '#666', fontSize: '0.9rem', fontWeight: 'bold' }}>Barang Stok Menipis</p>
-          <h2 style={{ margin: '10px 0 0 0', fontSize: '2rem', color: '#c62828' }}>{totalLowStock} Item</h2>
+          <h2 style={{ margin: '10px 0 0 0', fontSize: '2rem', color: '#d32f2f' }}>{totalLowStock} Item</h2>
         </div>
       </div>
 
@@ -78,14 +83,17 @@ export default async function Dashboard() {
         <div className="card" style={{ flex: 1, minWidth: '300px' }}>
           <h3 style={{ marginTop: 0 }}>Akses Cepat</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <Link href="/kasir" style={{ textDecoration: 'none' }}>
+              <div style={{ padding: '12px', background: '#e3f2fd', borderRadius: '6px', color: '#1565c0', fontWeight: 'bold' }}>🛒 Buka Kasir Offline</div>
+            </Link>
             <Link href="/produksi" style={{ textDecoration: 'none' }}>
-              <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px', color: '#333', fontWeight: 'bold' }}>👨‍🍳 Lapor Hasil Produksi</div>
+              <div style={{ padding: '12px', background: '#f1f8e9', borderRadius: '6px', color: '#33691e', fontWeight: 'bold' }}>👨‍🍳 Lapor Hasil Produksi</div>
             </Link>
             <Link href="/validasi" style={{ textDecoration: 'none' }}>
-              <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px', color: '#333', fontWeight: 'bold' }}>✅ Validasi QC</div>
+              <div style={{ padding: '12px', background: '#fff3e0', borderRadius: '6px', color: '#e65100', fontWeight: 'bold' }}>✅ Validasi QC</div>
             </Link>
-            <Link href="/pembelian" style={{ textDecoration: 'none' }}>
-              <div style={{ padding: '12px', background: '#f0f0f0', borderRadius: '6px', color: '#333', fontWeight: 'bold' }}>🛒 Catat Pembelian</div>
+            <Link href="/keuangan" style={{ textDecoration: 'none' }}>
+              <div style={{ padding: '12px', background: '#ffebee', borderRadius: '6px', color: '#c62828', fontWeight: 'bold' }}>💰 Cek Keuangan</div>
             </Link>
           </div>
         </div>

@@ -1,8 +1,8 @@
 import { supabaseServer } from "@/lib/supabase-server";
-import { tambahResepBahan, tambahResepKemasan } from "./actions";
+import { simpanResepBahan, simpanResepKemasan } from "./actions";
 import FormResep from "@/components/resep/FormResep";
-import { getCurrentRole } from "@/lib/auth/role"; // <-- Import Satpam
-import { redirect } from "next/navigation"; // <-- Import Redirect
+import { getCurrentRole } from "@/lib/auth/role";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +28,11 @@ export default async function ResepPage() {
       <h1>Manajemen Resep (BOM)</h1>
       <p style={{ color: '#666' }}>Tentukan bahan baku dan kemasan yang dibutuhkan untuk setiap produk.</p>
       
+      {/* Panggil Komponen dengan Props yang sesuai */}
       <FormResep 
         skus={skus}
         rawMaterials={rmRes.data || []}
         packagings={pkgRes.data || []}
-        addBahanAction={tambahResepBahan}
-        addKemasanAction={tambahResepKemasan}
       />
       
       <div className="card" style={{ marginTop: '20px' }}>

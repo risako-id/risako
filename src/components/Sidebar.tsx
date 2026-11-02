@@ -128,11 +128,22 @@ export default function Sidebar({ role }: { role: string | null }) {
           )}
         </nav>
 
-        <form action={logout} style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #333' }}>
-          <button type="submit" style={{ width: '100%', background: '#c62828', color: 'white' }}>
-            Logout
-          </button>
-        </form>
+        {/* MENU PROFIL & LOGOUT */}
+        <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid #333' }}>
+          <Link href="/profil" style={{ 
+            display: 'block', padding: '10px', color: '#fff', textDecoration: 'none', 
+            background: '#444', borderRadius: '6px', marginBottom: '10px', 
+            textAlign: 'center', fontWeight: 'bold' 
+          }}>
+            👤 Profil Saya
+          </Link>
+          
+          <form action={logout}>
+            <button type="submit" style={{ width: '100%', background: '#c62828', color: 'white' }}>
+              Logout
+            </button>
+          </form>
+        </div>
       </aside>
 
       {isOpen && <div className="overlay" onClick={() => setIsOpen(false)} />}

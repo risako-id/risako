@@ -9,8 +9,6 @@ export default function FormPembelian({ action, rawMaterials, packagings, cashAc
   suppliers: any[]
 }) {
   const [type, setType] = useState("raw_material");
-  const [paymentStatus, setPaymentStatus] = useState("paid");
-  
   const items = type === "raw_material" ? rawMaterials : packagings;
 
   return (
@@ -37,22 +35,30 @@ export default function FormPembelian({ action, rawMaterials, packagings, cashAc
         <input name="total_price" type="number" placeholder="Total Harga (Rp)" required />
         <input name="note" placeholder="Keterangan (ex: Beli Puyuh)" />
 
-        <select name="payment_status" value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value)} required>
-          <option value="paid">Lunas</option>
-          <option value="unpaid">Kredit (Tempo)</option>
+        {/* PEMILIHAN METODE PEMBAYARAN / DOMPET */}
+        <select name="payment_method" required>
+          <option value="">-- Pilih Sumber Dana --</option>
+          
+          <optgroup label="💵 BAYAR LUNAS (Uang Kas/Bank Berkurang)">
+            {cashAccounts.filter(a => a.type !== 'liability').map(a => (
+              <option key={a.id} value={a.id}>Lunas via {a.name}</option>
+            ))}
+          </optgroup>
+          
+          <optgroup label="💳 BAYAR PAKAI UTANG / KREDIT (Kas Aman)">
+            {cashAccounts.filter(a => a.type === 'liability').map(a => (
+              <option key={a.id} value={a.id}>Kredit via {a.name}</option>
+            ))}
+          </optgroup>
         </select>
 
-        {paymentStatus === "paid" ? (
-          <select name="cash_account_id" required>
-            <option value="">-- Sumber Dana (Bayar Lunas) --</option>
-            {cashAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        ) : (
-          <div>
-            <label style={{ fontSize: '0.8rem', color: '#666', display: 'block', marginBottom: '4px' }}>Jatuh Tempo:</label>
-            <input name="due_date" type="date" required style={{ width: '100%' }} />
-          </div>
-        )}
+        {/* TANGGAL JATUH TEMPO (Hanya untuk Tempo Supplier atau Kredit) */}
+        <div>
+          <label style={{ fontSize: '0.75rem', color: '#666', display: 'block', marginBottom: '2px' }}>
+            Jatuh Tempo (Kosongkan jika Lunas)
+          </label>
+          <input name="due_date" type="date" style={{ width: '100%' }} />
+        </div>
       </div>
       
       <div style={{ marginTop: '15px' }}>

@@ -15,7 +15,7 @@ export async function tambahBahanBaku(fd: FormData) {
     .insert({
       store_id, name,
       unit: String(fd.get("unit") || "").trim(),
-      avg_cost: 0, // <-- Harga default 0, akan diupdate lewat pembelian
+      avg_cost: 0,
       min_stock: Number(fd.get("min_stock") || 0),
     })
     .select("id").single();
@@ -30,7 +30,6 @@ export async function tambahBahanBaku(fd: FormData) {
   revalidatePath("/bahan-baku");
 }
 
-// Fungsi koreksi stok tetap sama
 export async function koreksiStokBahan(fd: FormData) {
   const id = String(fd.get("id"));
   const qty_fisik = Number(fd.get("qty_fisik") || 0);
@@ -51,4 +50,33 @@ export async function koreksiStokBahan(fd: FormData) {
   });
 
   revalidatePath("/bahan-baku");
+}
+
+export async function editBahanBaku(fd: FormData) {
+  const id = String(fd.get("id"));
+  const name = String(fd.get("name") || "").trim();
+  const unit = String(fd.get("unit") || "").trim();
+  const min_stock = Number(fd.get("min_stock") || 0);
+  if (!id || !name || !unit) return;
+
+  await supabaseServer.from("raw_materials").update({ name, unit, min_stock }).eq("id", id);
+  revalidatePath("/bahan-baku");
+}
+
+export async function hapusBahanBaku(id: string) {
+  try {
+    // Cek apakah pernah dipakai di resep
+    const { count } = await supabaseServer.from("recipes").select("*", { count: 'exact', head: true }).eq("raw_material_id", id);
+    if (count && count > 0) return { error: "Gagal hapus: Bahan sudah masuk dalam Resep (BOM)." };
+
+    // Cek mutasi
+    const { count: mutCount } = await supabaseServer.from("raw_material_movements").select("*", { count: 'exact', head: true }).eq("raw_material_id", id);
+    if (mutCount && mutCount > 1) return { error: "Gagal hapus: Bahan sudah ada riwayat transaksi." };
+
+    await supabaseServer.from("raw_materials").delete().eq("id", id);
+    revalidatePath("/bahan-baku");
+    return { success: true };
+  } catch (err: any) {
+    return { error: err.message };
+  }
 }

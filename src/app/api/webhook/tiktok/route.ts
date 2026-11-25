@@ -2,6 +2,18 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
+// Fungsi untuk membuat signature TikTok
+function generateTikTokSignature(path: string, params: Record<string, string>, appSecret: string): string {
+  const sortedKeys = Object.keys(params).sort();
+  let signString = appSecret + path;
+  for (const key of sortedKeys) {
+    signString += key + params[key];
+  }
+  signString += appSecret;
+  
+  return crypto.createHmac('sha256', appSecret).update(signString).digest('hex');
+}
+
 export async function POST(request: Request) {
   const appKey = process.env.TIKTOK_APP_KEY;
   const appSecret = process.env.TIKTOK_APP_SECRET;
@@ -18,9 +30,7 @@ export async function POST(request: Request) {
     const rawBody = await request.text();
     const signatureHeader = request.headers.get('Authorization');
 
-    if (!signatureHeader) {
-      return new NextResponse('Missing signature', { status: 401 });
-    }
+    if (!signatureHeader) return new NextResponse('Missing signature', { status: 401 });
 
     const expectedSignature = crypto
       .createHmac('sha256', appSecret)
@@ -32,15 +42,11 @@ export async function POST(request: Request) {
       Buffer.from(expectedSignature, 'utf8')
     );
 
-    if (!isValid) {
-      return new NextResponse('Invalid signature', { status: 401 });
-    }
+    if (!isValid) return new NextResponse('Invalid signature', { status: 401 });
 
     const payload = JSON.parse(rawBody);
 
-    if (!payload.data || !payload.data.order_id) {
-      return new NextResponse(null, { status: 200 });
-    }
+    if (!payload.data || !payload.data.order_id) return new NextResponse(null, { status: 200 });
 
     const eventData = payload.data;
     const orderId = eventData.order_id;
@@ -63,8 +69,24 @@ export async function POST(request: Request) {
       const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token').limit(1).single();
       if (!tokenData) throw new Error("Token TikTok tidak ditemukan");
 
-      // PERBAIKAN: Menambahkan app_key di query parameter
-      const orderDetailsResponse = await fetch(`https://open-api.tiktokglobalshop.com/order/202309/orders?ids=${orderId}&app_key=${appKey}`, {
+      // --- PERSIAPAN REQUEST KE API TIKTOK ---
+      const path = '/order/202309/orders';
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      const params: Record<string, string> = {
+        app_key: appKey,
+        timestamp: timestamp,
+        ids: orderId,
+      };
+
+      // Buat signature
+      const sign = generateTikTokSignature(path, params, appSecret);
+      params.sign = sign;
+
+      // Buat query string
+      const queryString = new URLSearchParams(params).toString();
+      const url = `https://open-api.tiktokglobalshop.com${path}?${queryString}`;
+
+      const orderDetailsResponse = await fetch(url, {
         method: 'GET',
         headers: {
           'x-tts-access-token': tokenData.access_token,

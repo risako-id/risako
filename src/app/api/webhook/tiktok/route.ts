@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-// Fungsi untuk membuat signature TikTok
+// Fungsi untuk membuat signature TikTok versi 202309
 function generateTikTokSignature(path: string, params: Record<string, string>, appSecret: string): string {
   const sortedKeys = Object.keys(params).sort();
   let signString = appSecret + path;
@@ -66,23 +66,25 @@ export async function POST(request: Request) {
 
     if (orderStatus === 'READY_TO_SHIP' || orderStatus === 'AWAITING_COLLECTION' || orderStatus === 'AWAITING_SHIPMENT') {
       
-      const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token').limit(1).single();
+      // PERBAIKAN 1: Ambil shop_cipher
+      const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token, shop_cipher').limit(1).single();
       if (!tokenData) throw new Error("Token TikTok tidak ditemukan");
+      if (!tokenData.shop_cipher) throw new Error("Shop Cipher tidak ditemukan, silakan otorisasi ulang.");
 
-      // --- PERSIAPAN REQUEST KE API TIKTOK ---
       const path = '/order/202309/orders';
       const timestamp = Math.floor(Date.now() / 1000).toString();
+      
+      // PERBAIKAN 2: Tambahkan shop_cipher ke params
       const params: Record<string, string> = {
         app_key: appKey,
         timestamp: timestamp,
         ids: orderId,
+        shop_cipher: tokenData.shop_cipher, 
       };
 
-      // Buat signature
       const sign = generateTikTokSignature(path, params, appSecret);
       params.sign = sign;
 
-      // Buat query string
       const queryString = new URLSearchParams(params).toString();
       const url = `https://open-api.tiktokglobalshop.com${path}?${queryString}`;
 

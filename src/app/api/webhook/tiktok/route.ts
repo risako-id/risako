@@ -18,17 +18,23 @@ export async function POST(request: Request) {
     const rawBody = await request.text();
     const signatureHeader = request.headers.get('Authorization');
 
-    // Verifikasi signature (wajib untuk TikTok)
     if (!signatureHeader) {
       return new NextResponse('Missing signature', { status: 401 });
     }
 
+    // Rumus signature TikTok: HMAC-SHA256 dari (app_key + rawBody) dengan app_secret
     const expectedSignature = crypto
       .createHmac('sha256', appSecret)
-      .update(appKey + rawBody) // PENTING: app_key + rawBody
+      .update(appKey + rawBody)
       .digest('hex');
 
-    if (signatureHeader !== expectedSignature) {
+    // Bandingkan signature (gunakan perbandingan yang aman)
+    const isValid = crypto.timingSafeEqual(
+      Buffer.from(signatureHeader || '', 'utf8'),
+      Buffer.from(expectedSignature, 'utf8')
+    );
+
+    if (!isValid) {
       return new NextResponse('Invalid signature', { status: 401 });
     }
 
@@ -39,7 +45,7 @@ export async function POST(request: Request) {
       return new NextResponse(null, { status: 200 });
     }
 
-    // --- Logika pemrosesan order (sama seperti sebelumnya, bisa dilanjutkan) ---
+    // --- Logika pemrosesan order (sama seperti sebelumnya) ---
     // (salin logika order dari kode sebelumnya ke sini)
 
     return new NextResponse(null, { status: 200 });

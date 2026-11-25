@@ -6,7 +6,6 @@ export async function GET(request: Request) {
   const code = searchParams.get('code');
   const error = searchParams.get('error');
 
-  // 1. Validasi jika ada error dari TikTok atau code tidak ditemukan
   if (error) {
     return NextResponse.json({ error: `TikTok Error: ${error}` }, { status: 400 });
   }
@@ -14,7 +13,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Kode otorisasi (code) tidak ditemukan di URL' }, { status: 400 });
   }
 
-  // 2. Ambil Environment Variables
   const appKey = process.env.TIKTOK_APP_KEY;
   const appSecret = process.env.TIKTOK_APP_SECRET;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -25,7 +23,6 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 3. Tukar 'code' dengan 'access_token' ke API TikTok
     const response = await fetch('https://auth.tiktok-shops.com/api/v2/token/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -37,9 +34,18 @@ export async function GET(request: Request) {
       }),
     });
 
+    // Tambahkan pengecekan response.ok untuk menangkap error HTTP
+    if (!response.ok) {
+      const errorText = await response.text();
+      return NextResponse.json({ 
+        error: 'TikTok API mengembalikan error HTTP', 
+        status: response.status,
+        details: errorText.substring(0, 500) // Tampilkan sebagian respons mentah
+      }, { status: 502 });
+    }
+
     const data = await response.json();
 
-    // Cek jika TikTok mengembalikan error pada respons API
     if (data.code !== 0) {
       return NextResponse.json({ 
         error: 'Gagal menukar token dari TikTok', 
@@ -47,17 +53,13 @@ export async function GET(request: Request) {
       }, { status: 400 });
     }
 
-    // 4. Ambil data token dari respons TikTok
     const tokenData = data.data;
-    
-    // 5. Inisialisasi Supabase dengan Service Role Key (Bypass RLS)
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 6. Simpan / Update token ke tabel 'tiktok_tokens'
     const { error: dbError } = await supabase
       .from('tiktok_tokens')
       .upsert({
-        shop_id: tokenData.open_id, // Menggunakan open_id/shop_id dari TikTok
+        shop_id: tokenData.open_id,
         access_token: tokenData.access_token,
         refresh_token: tokenData.refresh_token,
         access_expires_at: new Date(Date.now() + tokenData.access_token_expire_in * 1000).toISOString(),
@@ -72,19 +74,14 @@ export async function GET(request: Request) {
       }, { status: 500 });
     }
 
-    // 7. Tampilkan halaman sukses sederhana
     return new NextResponse(`
       <html>
         <body style="font-family: sans-serif; padding: 2rem; text-align: center;">
           <h1 style="color: green;">✅ Otorisasi Berhasil!</h1>
           <p>Aplikasi Risako sudah terhubung dengan TikTok Shop.</p>
-          <p>Token berhasil disimpan ke database. Anda bisa menutup halaman ini.</p>
         </body>
       </html>
-    `, {
-      status: 200,
-      headers: { 'Content-Type': 'text/html' },
-    });
+    `, { status: 200, headers: { 'Content-Type': 'text/html' } });
 
   } catch (err: any) {
     console.error('Error saat OAuth:', err);

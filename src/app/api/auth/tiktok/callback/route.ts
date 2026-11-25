@@ -1,6 +1,22 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Fungsi bantuan untuk fetch dengan retry
+async function fetchWithRetry(url: string, options: RequestInit, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      // Jika error 4xx/5xx, jangan retry, langsung kembalikan
+      if (response.status < 500) return response;
+    } catch (err) {
+      if (i === retries - 1) throw err; // Lemparkan error di percobaan terakhir
+      await new Promise(res => setTimeout(res, 1000 * (i + 1))); // Jeda sebelum retry
+    }
+  }
+  throw new Error('Fetch gagal setelah beberapa kali percobaan');
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
@@ -22,16 +38,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Environment variables (TikTok / Supabase) belum lengkap' }, { status: 500 });
   }
 
-  // Tentukan host berdasarkan environment (Sandbox vs Production)
-  // Jika Anda sedang menguji di Sandbox, gunakan auth-sandbox.
-  // Nanti saat sudah Production, ganti ke auth.tiktok-shops.com
-  const isSandbox = true; // Ubah ke false saat sudah production
-  const authHost = isSandbox 
-    ? 'https://auth-sandbox.tiktok-shops.com' 
-    : 'https://auth.tiktok-shops.com';
+  // Endpoint yang benar untuk semua environment (termasuk Sandbox)
+  const authHost = 'https://auth.tiktok-shops.com';
 
   try {
-    const response = await fetch(`${authHost}/api/v2/token/get`, {
+    const response = await fetchWithRetry(`${authHost}/api/v2/token/get`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -42,6 +53,7 @@ export async function GET(request: Request) {
       }),
     });
 
+    // Jika response tidak ok setelah retry, tampilkan detail error
     if (!response.ok) {
       const errorText = await response.text();
       return NextResponse.json({ 

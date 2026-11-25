@@ -22,8 +22,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Environment variables (TikTok / Supabase) belum lengkap' }, { status: 500 });
   }
 
+  // Tentukan host berdasarkan environment (Sandbox vs Production)
+  // Jika Anda sedang menguji di Sandbox, gunakan auth-sandbox.
+  // Nanti saat sudah Production, ganti ke auth.tiktok-shops.com
+  const isSandbox = true; // Ubah ke false saat sudah production
+  const authHost = isSandbox 
+    ? 'https://auth-sandbox.tiktok-shops.com' 
+    : 'https://auth.tiktok-shops.com';
+
   try {
-    const response = await fetch('https://auth.tiktok-shops.com/api/v2/token/get', {
+    const response = await fetch(`${authHost}/api/v2/token/get`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -34,13 +42,12 @@ export async function GET(request: Request) {
       }),
     });
 
-    // Tambahkan pengecekan response.ok untuk menangkap error HTTP
     if (!response.ok) {
       const errorText = await response.text();
       return NextResponse.json({ 
         error: 'TikTok API mengembalikan error HTTP', 
         status: response.status,
-        details: errorText.substring(0, 500) // Tampilkan sebagian respons mentah
+        details: errorText.substring(0, 500)
       }, { status: 502 });
     }
 

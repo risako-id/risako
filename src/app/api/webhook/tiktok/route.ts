@@ -46,7 +46,6 @@ export async function POST(request: Request) {
     const orderId = eventData.order_id;
     const orderStatus = eventData.order_status;
 
-    // Cek Idempotency
     const notificationId = payload.tts_notification_id || `fallback-${orderId}-${Date.now()}`;
     const { data: logData, error: logError } = await supabase
       .from('webhook_logs')
@@ -59,15 +58,13 @@ export async function POST(request: Request) {
       throw logError;
     }
 
-    // Proses jika status sesuai
     if (orderStatus === 'READY_TO_SHIP' || orderStatus === 'AWAITING_COLLECTION' || orderStatus === 'AWAITING_SHIPMENT') {
       
-      // 1. Ambil Token Akses dari Database
       const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token').limit(1).single();
       if (!tokenData) throw new Error("Token TikTok tidak ditemukan");
 
-      // 2. Tarik Detail Pesanan dari API TikTok
-      const orderDetailsResponse = await fetch(`https://open-api.tiktokglobalshop.com/order/202309/orders?ids=${orderId}`, {
+      // PERBAIKAN: Menambahkan app_key di query parameter
+      const orderDetailsResponse = await fetch(`https://open-api.tiktokglobalshop.com/order/202309/orders?ids=${orderId}&app_key=${appKey}`, {
         method: 'GET',
         headers: {
           'x-tts-access-token': tokenData.access_token,
@@ -81,15 +78,13 @@ export async function POST(request: Request) {
       }
 
       const orderDetails = await orderDetailsResponse.json();
-      const orderDataAPI = orderDetails.data.orders[0]; // Ambil data pesanan pertama
+      const orderDataAPI = orderDetails.data.orders[0];
 
       if (!orderDataAPI) throw new Error("Data pesanan tidak ditemukan di API TikTok");
 
-      // 3. Ambil Platform ID
       const { data: platformData } = await supabase.from('platforms').select('id').eq('name', 'tiktok').single();
       if (!platformData) throw new Error("Platform TikTok belum ada di database");
 
-      // 4. Simpan / Update Pesanan ke Database
       let { data: existingOrder } = await supabase.from('orders').select('id').eq('external_order_id', orderId).single();
       let orderData = existingOrder;
 
@@ -111,24 +106,20 @@ export async function POST(request: Request) {
 
       if (!orderData) throw new Error("Gagal membuat data pesanan");
 
-      // 5. Proses Item Pesanan (Looping data dari API, bukan dari Webhook)
       const lineItems = orderDataAPI.line_items || [];
       for (const item of lineItems) {
         const sellerSku = item.sku_id; 
         const qty = item.quantity;
 
-        // Cari mapping SKU
         const { data: mappingData } = await supabase.from('channel_skus').select('sku_id').eq('external_sku_id', sellerSku).single();
         if (!mappingData) {
           console.error(`Mapping SKU tidak ditemukan: ${sellerSku}`);
           continue;
         }
 
-        // Cek apakah item sudah pernah diproses
         const { data: existingItem } = await supabase.from('order_items').select('id').eq('order_id', orderData.id).eq('external_sku_id', sellerSku).single();
         if (existingItem) continue;
 
-        // Catat item
         await supabase.from('order_items').insert({
           order_id: orderData.id,
           sku_id: mappingData.sku_id,
@@ -137,7 +128,6 @@ export async function POST(request: Request) {
           unit_price: item.sale_price || 0
         });
 
-        // Potong Stok
         const { data: skuData } = await supabase.from('skus').select('stock_qty').eq('id', mappingData.sku_id).single();
         if (skuData) {
           const newStock = skuData.stock_qty - qty;

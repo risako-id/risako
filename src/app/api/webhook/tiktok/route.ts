@@ -66,7 +66,6 @@ export async function POST(request: Request) {
 
     if (orderStatus === 'READY_TO_SHIP' || orderStatus === 'AWAITING_COLLECTION' || orderStatus === 'AWAITING_SHIPMENT') {
       
-      // PERBAIKAN 1: Ambil shop_cipher
       const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token, shop_cipher').limit(1).single();
       if (!tokenData) throw new Error("Token TikTok tidak ditemukan");
       if (!tokenData.shop_cipher) throw new Error("Shop Cipher tidak ditemukan, silakan otorisasi ulang.");
@@ -74,7 +73,6 @@ export async function POST(request: Request) {
       const path = '/order/202309/orders';
       const timestamp = Math.floor(Date.now() / 1000).toString();
       
-      // PERBAIKAN 2: Tambahkan shop_cipher ke params
       const params: Record<string, string> = {
         app_key: appKey,
         timestamp: timestamp,
@@ -132,13 +130,21 @@ export async function POST(request: Request) {
 
       const lineItems = orderDataAPI.line_items || [];
       for (const item of lineItems) {
-        const sellerSku = item.sku_id; 
+        // Kita gunakan seller_sku, jika kosong pakai sku_id
+        const sellerSku = item.seller_sku || item.sku_id; 
         const qty = item.quantity;
 
         const { data: mappingData } = await supabase.from('channel_skus').select('sku_id').eq('external_sku_id', sellerSku).single();
+        
         if (!mappingData) {
           console.error(`Mapping SKU tidak ditemukan: ${sellerSku}`);
-          continue;
+          
+          // TRIK DEBUGGING: Tulis ID SKU yang gagal ke tabel webhook_logs
+          await supabase.from('webhook_logs')
+            .update({ status: `ERROR_SKU: ${sellerSku}` })
+            .eq('id', logData.id);
+            
+          continue; // Lanjut ke item berikutnya
         }
 
         const { data: existingItem } = await supabase.from('order_items').select('id').eq('order_id', orderData.id).eq('external_sku_id', sellerSku).single();
@@ -167,7 +173,12 @@ export async function POST(request: Request) {
       }
     }
 
-    await supabase.from('webhook_logs').update({ status: 'processed' }).eq('id', logData.id);
+    // Hanya update ke 'processed' jika tidak terhenti di tengah jalan oleh ERROR_SKU
+    const { data: currentLog } = await supabase.from('webhook_logs').select('status').eq('id', logData.id).single();
+    if (currentLog && currentLog.status === 'processing') {
+      await supabase.from('webhook_logs').update({ status: 'processed' }).eq('id', logData.id);
+    }
+
     return new NextResponse(null, { status: 200 });
 
   } catch (err: any) {

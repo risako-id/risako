@@ -122,11 +122,10 @@ export async function POST(request: Request) {
       if (updateOrderError) throw new Error(`Gagal update status order: ${updateOrderError.message}`);
     }
 
-    // --- INI TAMBAHAN UNTUK MEMPERBAIKI ERROR TYPESCRIPT VERCEL ---
+    // Guard clause untuk TypeScript Vercel
     if (!orderData) {
       throw new Error("Gagal mendapatkan atau membuat data pesanan (orderData null)");
     }
-    // -------------------------------------------------------------
 
     // --- 2. SIMPAN ITEM PESANAN ---
     for (const item of lineItems) {
@@ -154,8 +153,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // --- 3. POTONG STOK (HANYA JIKA STATUS "SHIPPED") ---
-    const isReadyToShip = ['SHIPPED'].includes(orderStatus);
+    // --- 3. POTONG STOK (HANYA JIKA STATUS "AWAITING_COLLECTION") ---
+    // Catatan: Jika ingin lebih aman, kamu bisa tambahkan 'SHIPPED' ke dalam array ini:
+    // const isReadyToShip = ['AWAITING_COLLECTION', 'SHIPPED'].includes(orderStatus);
+    const isReadyToShip = ['AWAITING_COLLECTION'].includes(orderStatus);
 
     if (isReadyToShip) {
       const { data: checkMovement } = await supabase.from('stock_movements')

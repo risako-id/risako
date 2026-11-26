@@ -2,7 +2,17 @@ import { supabaseServer } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
-export default async function PesananPage() {
+interface PageProps {
+  searchParams: { [key: string]: string | string[] | undefined };
+}
+
+export default async function PesananPage({ searchParams }: PageProps) {
+  // 1. Tangkap nilai dari filter (jika ada)
+  const statusFilter = (searchParams.status as string) || "";
+  const startDate = (searchParams.startDate as string) || "";
+  const endDate = (searchParams.endDate as string) || "";
+  const searchId = (searchParams.searchId as string) || "";
+
   const allowedStatuses = [
     'AWAITING_COLLECTION', 
     'IN_TRANSIT', 
@@ -12,30 +22,116 @@ export default async function PesananPage() {
     'CANCELLED'
   ];
 
-  const { data: orders } = await supabaseServer
+  // 2. Bangun Query Supabase
+  let query = supabaseServer
     .from("orders")
     .select(`
       id, external_order_id, status, created_at, total_amount,
       order_items (quantity, skus (sku_code, products(name)))
     `)
-    .in('status', allowedStatuses) 
-    .order("created_at", { ascending: false })
-    .limit(50);
+    .in('status', allowedStatuses); // Wajib berstatus AWAITING_COLLECTION ke atas
 
+  // Terapkan filter status
+  if (statusFilter) {
+    query = query.eq('status', statusFilter);
+  }
+  // Terapkan filter tanggal
+  if (startDate) {
+    query = query.gte('created_at', `${startDate}T00:00:00Z`);
+  }
+  if (endDate) {
+    query = query.lte('created_at', `${endDate}T23:59:59Z`);
+  }
+  // Terapkan filter ID Pesanan
+  if (searchId) {
+    query = query.ilike('external_order_id', `%${searchId}%`);
+  }
+
+  const { data: orders } = await query.order("created_at", { ascending: false }).limit(50);
+
+  // 3. Fungsi Format Tanggal ke WIB (Asia/Jakarta) & Format DD-MM-YYYY HH:mm
   const formatDate = (dateString: string) => {
     const d = new Date(dateString);
-    const day = String(d.getDate()).padStart(2, '0');
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
-    return `${day}-${month}-${year} ${hours}:${minutes}`;
+    // Gunakan Intl dengan timeZone Asia/Jakarta
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(d);
+    
+    const getPart = (type: string) => parts.find(p => p.type === type)?.value;
+    return `${getPart('day')}-${getPart('month')}-${getPart('year')} ${getPart('hour')}:${getPart('minute')}`;
   };
 
   return (
     <div>
       <h1>Pesanan Online</h1>
-      <div className="card" style={{ padding: 0, marginTop: '20px' }}>
+
+      {/* UI FILTER */}
+      <div className="card" style={{ padding: '15px', marginTop: '20px', marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <form method="GET" action="/pesanan" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', width: '100%', alignItems: 'flex-end' }}>
+          
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Cari ID Pesanan</label>
+            <input 
+              type="text" 
+              name="searchId" 
+              placeholder="Contoh: 5873..." 
+              defaultValue={searchId} 
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Dari Tanggal</label>
+            <input 
+              type="date" 
+              name="startDate" 
+              defaultValue={startDate} 
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Sampai Tanggal</label>
+            <input 
+              type="date" 
+              name="endDate" 
+              defaultValue={endDate} 
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            />
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Status</label>
+            <select 
+              name="status" 
+              defaultValue={statusFilter}
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value="">Semua Status</option>
+              <option value="AWAITING_COLLECTION">Awaiting Collection</option>
+              <option value="IN_TRANSIT">In Transit</option>
+              <option value="COMPLETED">Completed</option>
+              <option value="RETURNED">Returned</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+
+          <div>
+            <button type="submit" style={{ padding: '9px 15px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+              Terapkan Filter
+            </button>
+            <a href="/pesanan" style={{ padding: '9px 15px', marginLeft: '5px', background: '#e0e0e0', color: '#333', textDecoration: 'none', borderRadius: '4px', fontSize: '14px' }}>
+              Reset
+            </a>
+          </div>
+
+        </form>
+      </div>
+
+      {/* TABEL PESANAN */}
+      <div className="card" style={{ padding: 0 }}>
         <table>
           <thead>
             <tr>
@@ -67,7 +163,11 @@ export default async function PesananPage() {
               </tr>
             ))}
             {(!orders || orders.length === 0) && (
-              <tr><td colSpan={6} style={{ textAlign: 'center', color: '#888' }}>Belum ada pesanan masuk.</td></tr>
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', color: '#888', padding: '20px' }}>
+                  Tidak ada pesanan yang sesuai dengan filter.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

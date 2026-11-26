@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-// Fungsi untuk membuat signature TikTok versi 202309
 function generateTikTokSignature(path: string, params: Record<string, string>, appSecret: string): string {
   const sortedKeys = Object.keys(params).sort();
   let signString = appSecret + path;
@@ -10,7 +9,6 @@ function generateTikTokSignature(path: string, params: Record<string, string>, a
     signString += key + params[key];
   }
   signString += appSecret;
-  
   return crypto.createHmac('sha256', appSecret).update(signString).digest('hex');
 }
 
@@ -25,6 +23,7 @@ export async function POST(request: Request) {
   }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  let logId = null; // Variabel untuk menyimpan ID log
 
   try {
     const rawBody = await request.text();
@@ -32,15 +31,8 @@ export async function POST(request: Request) {
 
     if (!signatureHeader) return new NextResponse('Missing signature', { status: 401 });
 
-    const expectedSignature = crypto
-      .createHmac('sha256', appSecret)
-      .update(appKey + rawBody)
-      .digest('hex');
-
-    const isValid = crypto.timingSafeEqual(
-      Buffer.from(signatureHeader || '', 'utf8'),
-      Buffer.from(expectedSignature, 'utf8')
-    );
+    const expectedSignature = crypto.createHmac('sha256', appSecret).update(appKey + rawBody).digest('hex');
+    const isValid = crypto.timingSafeEqual(Buffer.from(signatureHeader || '', 'utf8'), Buffer.from(expectedSignature, 'utf8'));
 
     if (!isValid) return new NextResponse('Invalid signature', { status: 401 });
 
@@ -63,8 +55,10 @@ export async function POST(request: Request) {
       if (logError.code === '23505') return new NextResponse(null, { status: 200 });
       throw logError;
     }
+    
+    logId = logData.id; // Simpan ID log
 
-    // --- LOGIKA SEMENTARA: FILTER STATUS DIMATIKAN UNTUK UJI COBA SANDBOX ---
+    // --- SEMENTARA DIMATIKAN UNTUK UJI COBA ---
     // if (orderStatus !== 'AWAITING_COLLECTION') {
     //   await supabase.from('webhook_logs').update({ status: `SKIP_STATUS: ${orderStatus}` }).eq('id', logData.id);
     //   return new NextResponse(null, { status: 200 });
@@ -101,9 +95,8 @@ export async function POST(request: Request) {
 
     const lineItems = orderDataAPI.line_items || [];
     
-    // Cek jika line items kosong
     if (lineItems.length === 0) {
-      await supabase.from('webhook_logs').update({ status: 'ERROR_LINE_ITEMS_KOSONG' }).eq('id', logData.id);
+      await supabase.from('webhook_logs').update({ status: 'ERROR_LINE_ITEMS_KOSONG' }).eq('id', logId);
       return new NextResponse(null, { status: 200 });
     }
 
@@ -136,7 +129,7 @@ export async function POST(request: Request) {
       const { data: mappingData } = await supabase.from('channel_skus').select('sku_id').eq('external_sku_id', sellerSku).single();
       
       if (!mappingData) {
-        await supabase.from('webhook_logs').update({ status: `ERROR_SKU: ${sellerSku}` }).eq('id', logData.id);
+        await supabase.from('webhook_logs').update({ status: `ERROR_SKU: ${sellerSku}` }).eq('id', logId);
         continue; 
       }
 
@@ -165,16 +158,20 @@ export async function POST(request: Request) {
       }
     }
 
-    // Update log menjadi processed jika tidak terhenti oleh error SKU/kosong
-    const { data: currentLog } = await supabase.from('webhook_logs').select('status').eq('id', logData.id).single();
-    if (currentLog && currentLog.status === 'processing') {
-      await supabase.from('webhook_logs').update({ status: 'processed' }).eq('id', logData.id);
-    }
+    await supabase.from('webhook_logs').update({ status: 'processed' }).eq('id', logId);
 
     return new NextResponse(null, { status: 200 });
 
   } catch (err: any) {
     console.error('Webhook Error:', err);
+    
+    // TRIK DEBUGGING: Tulis error asli ke database
+    if (logId) {
+      await supabase.from('webhook_logs')
+        .update({ status: `CRASH: ${err.message.substring(0, 50)}` })
+        .eq('id', logId);
+    }
+    
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

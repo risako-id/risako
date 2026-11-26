@@ -64,13 +64,13 @@ export async function POST(request: Request) {
       throw logError;
     }
 
-    // --- LOGIKA BARU: Hanya Proses AWAITING_COLLECTION ---
-    if (orderStatus !== 'AWAITING_COLLECTION') {
-      await supabase.from('webhook_logs').update({ status: `SKIP_STATUS: ${orderStatus}` }).eq('id', logData.id);
-      return new NextResponse(null, { status: 200 });
-    }
+    // --- LOGIKA SEMENTARA: FILTER STATUS DIMATIKAN UNTUK UJI COBA SANDBOX ---
+    // if (orderStatus !== 'AWAITING_COLLECTION') {
+    //   await supabase.from('webhook_logs').update({ status: `SKIP_STATUS: ${orderStatus}` }).eq('id', logData.id);
+    //   return new NextResponse(null, { status: 200 });
+    // }
 
-    // Lanjut ke API TikTok karena statusnya sesuai
+    // Lanjut ke API TikTok
     const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token, shop_cipher').limit(1).single();
     if (!tokenData || !tokenData.shop_cipher) throw new Error("Token atau Shop Cipher tidak valid");
 

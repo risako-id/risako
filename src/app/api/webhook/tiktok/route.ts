@@ -5,9 +5,7 @@ import crypto from 'crypto';
 function generateTikTokSignature(path: string, params: Record<string, string>, appSecret: string): string {
   const sortedKeys = Object.keys(params).sort();
   let signString = appSecret + path;
-  for (const key of sortedKeys) {
-    signString += key + params[key];
-  }
+  for (const key of sortedKeys) { signString += key + params[key]; }
   signString += appSecret;
   return crypto.createHmac('sha256', appSecret).update(signString).digest('hex');
 }
@@ -43,6 +41,20 @@ export async function POST(request: Request) {
     const eventData = payload.data;
     const orderId = eventData.order_id;
     const orderStatus = eventData.order_status; 
+    const shopId = payload.shop_id || eventData.shop_id; 
+
+    // --- FILTER STATUS: ABAIKAN UNPAID & AWAITING_SHIPMENT ---
+    if (['UNPAID', 'AWAITING_SHIPMENT'].includes(orderStatus)) {
+      // Opsional: Catat di log sebagai SKIP agar kita tahu webhook masuk
+      await supabase.from('webhook_logs').insert({ 
+        external_event_id: payload.tts_notification_id || `skip-${orderId}-${Date.now()}`, 
+        status: `SKIP_STATUS: ${orderStatus}` 
+      });
+      return new NextResponse(null, { status: 200 }); 
+    }
+    // ---------------------------------------------------------
+
+    if (!shopId) throw new Error("Shop ID tidak ditemukan di payload webhook");
 
     const notificationId = payload.tts_notification_id || `fallback-${orderId}-${Date.now()}`;
     const { data: logData, error: logError } = await supabase
@@ -58,8 +70,16 @@ export async function POST(request: Request) {
     
     logId = logData.id; 
 
-    const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token, shop_cipher').limit(1).single();
-    if (!tokenData || !tokenData.shop_cipher) throw new Error("Token atau Shop Cipher tidak valid");
+    // --- AMBIL TOKEN BERDASARKAN SHOP_ID ---
+    const { data: tokenData, error: tokenError } = await supabase
+      .from('tiktok_tokens')
+      .select('access_token, shop_cipher, store_id')
+      .eq('shop_id', shopId)
+      .single();
+
+    if (tokenError || !tokenData || !tokenData.shop_cipher || !tokenData.store_id) {
+      throw new Error(`Token/Store ID tidak valid untuk Shop ID: ${shopId}`);
+    }
 
     const path = '/order/202507/orders'; 
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -96,15 +116,17 @@ export async function POST(request: Request) {
     const { data: platformData } = await supabase.from('platforms').select('id').eq('name', 'tiktok').single();
     if (!platformData) throw new Error("Platform TikTok belum ada di database");
 
-    // --- 1. SIMPAN / UPDATE DATA PESANAN ---
+    // --- SIMPAN / UPDATE PESANAN ---
     let { data: existingOrder } = await supabase.from('orders').select('id, status').eq('external_order_id', orderId).maybeSingle();
     let orderData = existingOrder;
+    let isNewOrder = false;
 
     if (!orderData) {
+      isNewOrder = true;
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
-          store_id: '22222222-2222-2222-2222-222222222222', 
+          store_id: tokenData.store_id, 
           platform_id: platformData.id,
           external_order_id: orderId,
           status: orderStatus,
@@ -122,12 +144,9 @@ export async function POST(request: Request) {
       if (updateOrderError) throw new Error(`Gagal update status order: ${updateOrderError.message}`);
     }
 
-    // Guard clause untuk TypeScript Vercel
-    if (!orderData) {
-      throw new Error("Gagal mendapatkan atau membuat data pesanan (orderData null)");
-    }
+    if (!orderData) throw new Error("Gagal mendapatkan data pesanan");
 
-    // --- 2. SIMPAN ITEM PESANAN ---
+    // --- SIMPAN ITEM PESANAN ---
     for (const item of lineItems) {
       const sellerSku = item.seller_sku || item.sku_id; 
       const qty = item.quantity || 1; 
@@ -153,19 +172,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // --- 3. POTONG STOK (HANYA JIKA STATUS "AWAITING_COLLECTION") ---
-    // Catatan: Jika ingin lebih aman, kamu bisa tambahkan 'SHIPPED' ke dalam array ini:
-    // const isReadyToShip = ['AWAITING_COLLECTION', 'SHIPPED'].includes(orderStatus);
-    const isReadyToShip = ['AWAITING_COLLECTION'].includes(orderStatus);
-
-    if (isReadyToShip) {
-      const { data: checkMovement } = await supabase.from('stock_movements')
-        .select('id')
-        .like('note', `%${orderId}%`)
-        .limit(1)
-        .maybeSingle();
-
-      if (!checkMovement) {
+    // --- POTONG STOK (HANYA UNTUK PESANAN BARU) ---
+    // Karena kita skip AWAITING_SHIPMENT, saat masuk ke sini berarti status awal adalah AWAITING_COLLECTION ke atas
+    if (isNewOrder) {
         const { data: currentOrderItems } = await supabase.from('order_items').select('id, sku_id, quantity').eq('order_id', orderData.id);
         
         if (currentOrderItems) {
@@ -197,7 +206,6 @@ export async function POST(request: Request) {
             }
           }
         }
-      }
     }
 
     await supabase.from('webhook_logs').update({ status: 'processed' }).eq('id', logId);
@@ -206,9 +214,7 @@ export async function POST(request: Request) {
   } catch (err: any) {
     console.error('Webhook Error:', err);
     if (logId) {
-      await supabase.from('webhook_logs')
-        .update({ status: `CRASH: ${err.message.substring(0, 100)}` })
-        .eq('id', logId);
+      await supabase.from('webhook_logs').update({ status: `CRASH: ${err.message.substring(0, 100)}` }).eq('id', logId);
     }
     return new NextResponse('Internal Server Error', { status: 500 });
   }

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-// Fungsi untuk generate signature API TikTok
 function generateTikTokSignature(path: string, params: Record<string, string>, appSecret: string): string {
   const sortedKeys = Object.keys(params).sort();
   let signString = appSecret + path;
@@ -44,9 +43,9 @@ export async function POST(request: Request) {
 
     const eventData = payload.data;
     const orderId = eventData.order_id;
-    const orderStatus = eventData.order_status;
+    const orderStatus = eventData.order_status; // Status dari webhook (misal: AWAITING_SHIPMENT, SHIPPED)
 
-    // Mencegah duplikasi log
+    // Mencegah duplikasi log webhook
     const notificationId = payload.tts_notification_id || `fallback-${orderId}-${Date.now()}`;
     const { data: logData, error: logError } = await supabase
       .from('webhook_logs')
@@ -65,8 +64,7 @@ export async function POST(request: Request) {
     const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token, shop_cipher').limit(1).single();
     if (!tokenData || !tokenData.shop_cipher) throw new Error("Token atau Shop Cipher tidak valid");
 
-    // --- Panggil API TikTok untuk ambil detail pesanan ---
-    // CATATAN: Saya ubah versinya ke 202507 sesuai API Testing Tool terakhirmu
+    // --- Panggil API TikTok Get Order Detail ---
     const path = '/order/202507/orders'; 
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const params: Record<string, string> = { app_key: appKey, timestamp: timestamp, ids: orderId, shop_cipher: tokenData.shop_cipher };
@@ -99,20 +97,20 @@ export async function POST(request: Request) {
       return new NextResponse(null, { status: 200 });
     }
 
-    // --- Cek Platform di Database ---
+    // --- Cek Platform ---
     const { data: platformData } = await supabase.from('platforms').select('id').eq('name', 'tiktok').single();
     if (!platformData) throw new Error("Platform TikTok belum ada di database");
 
-    // --- Cek atau Buat Order di Database ---
-    let { data: existingOrder } = await supabase.from('orders').select('id').eq('external_order_id', orderId).maybeSingle();
+    // --- 1. SIMPAN / UPDATE DATA PESANAN ---
+    let { data: existingOrder } = await supabase.from('orders').select('id, status').eq('external_order_id', orderId).maybeSingle();
     let orderData = existingOrder;
 
     if (!orderData) {
+      // Jika pesanan baru masuk
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
-          // TODO: Ganti hardcode store_id ini jika sistemmu sudah multi-store
-          store_id: '22222222-2222-2222-2222-222222222222',
+          store_id: '22222222-2222-2222-2222-222222222222', // Sesuaikan jika multi-store
           platform_id: platformData.id,
           external_order_id: orderId,
           status: orderStatus,
@@ -121,85 +119,102 @@ export async function POST(request: Request) {
       
       if (orderError) throw new Error(`Gagal insert order: ${orderError.message}`);
       orderData = newOrder;
+    } else if (orderData.status !== orderStatus) {
+      // Jika pesanan sudah ada, tapi statusnya berubah
+      const { error: updateOrderError } = await supabase
+        .from('orders')
+        .update({ status: orderStatus, updated_at: new Date().toISOString() })
+        .eq('id', orderData.id);
+        
+      if (updateOrderError) throw new Error(`Gagal update status order: ${updateOrderError.message}`);
     }
 
-    if (!orderData) throw new Error("Gagal membuat atau menemukan data pesanan");
-
-    // --- PROSES LINE ITEMS & POTONG STOK ---
+    // --- 2. SIMPAN ITEM PESANAN ---
     for (const item of lineItems) {
       const sellerSku = item.seller_sku || item.sku_id; 
-      
-      // PERBAIKAN 1: Beri default 1 jika quantity tidak ada di JSON TikTok (mencegah NaN)
       const qty = item.quantity || 1; 
 
-      // Cari relasi SKU TikTok ke SKU ERP
       const { data: mappingData } = await supabase.from('channel_skus').select('sku_id').eq('external_sku_id', sellerSku).maybeSingle();
-      
       if (!mappingData) {
         await supabase.from('webhook_logs').update({ status: `ERROR_SKU: ${sellerSku}` }).eq('id', logId);
         continue; 
       }
 
-      // Cek apakah item sudah pernah diproses sebelumnya (mencegah double stock reduction)
       const { data: existingItem } = await supabase.from('order_items').select('id').eq('order_id', orderData.id).eq('external_sku_id', sellerSku).maybeSingle();
-      if (existingItem) continue;
-
-      // PERBAIKAN 2: Tangkap error jika insert order_items gagal
-      const { error: insertItemError } = await supabase.from('order_items').insert({
-        order_id: orderData.id,
-        sku_id: mappingData.sku_id,
-        external_sku_id: sellerSku,
-        quantity: qty,
-        unit_price: parseFloat(item.sale_price) || 0 
-      });
-
-      if (insertItemError) {
-        throw new Error(`Gagal insert order_item (${sellerSku}): ${insertItemError.message}`);
-      }
-
-      // Ambil stok saat ini
-      const { data: skuData, error: skuError } = await supabase.from('skus').select('stock_qty').eq('id', mappingData.sku_id).single();
       
-      if (skuError || !skuData) {
-        throw new Error(`SKU ID ${mappingData.sku_id} tidak ditemukan di tabel skus.`);
-      }
+      if (!existingItem) {
+        const { error: insertItemError } = await supabase.from('order_items').insert({
+          order_id: orderData.id,
+          sku_id: mappingData.sku_id,
+          external_sku_id: sellerSku,
+          quantity: qty,
+          unit_price: parseFloat(item.sale_price) || 0 
+        });
 
-      // Kurangi stok
-      const newStock = skuData.stock_qty - qty;
-      const { error: updateStockError } = await supabase.from('skus').update({ stock_qty: newStock }).eq('id', mappingData.sku_id);
-      
-      if (updateStockError) {
-        throw new Error(`Gagal update stok: ${updateStockError.message}`);
+        if (insertItemError) throw new Error(`Gagal insert order_item (${sellerSku}): ${insertItemError.message}`);
       }
-      
-      // Catat mutasi stok
-      const { error: movementError } = await supabase.from('stock_movements').insert({
-        sku_id: mappingData.sku_id,
-        movement_type: 'OUT',
-        qty_change: -qty,
-        note: `Penjualan TikTok Order ID: ${orderId}`
-      });
+    }
 
-      if (movementError) {
-        throw new Error(`Gagal insert mutasi stok: ${movementError.message}`);
+    // --- 3. POTONG STOK (HANYA JIKA STATUS "SHIPPED") ---
+    const isReadyToShip = ['SHIPPED'].includes(orderStatus);
+
+    if (isReadyToShip) {
+      // Cek apakah stok untuk pesanan ini sudah pernah dipotong sebelumnya
+      const { data: checkMovement } = await supabase.from('stock_movements')
+        .select('id')
+        .like('note', `%${orderId}%`)
+        .limit(1)
+        .maybeSingle();
+
+      if (!checkMovement) {
+        // Ambil data item pesanan yang baru disimpan
+        const { data: currentOrderItems } = await supabase.from('order_items').select('id, sku_id, quantity').eq('order_id', orderData.id);
+        
+        if (currentOrderItems) {
+          for (const item of currentOrderItems) {
+            // A. Potong Stok Barang Jadi (Insert ke stock_movements)
+            const { error: movementError } = await supabase.from('stock_movements').insert({
+              sku_id: item.sku_id,
+              movement_type: 'sale', 
+              qty_change: -item.quantity,
+              order_item_id: item.id,
+              note: `Penjualan TikTok: ${orderId}`
+            });
+
+            if (movementError) throw new Error(`Gagal insert mutasi stok: ${movementError.message}`);
+
+            // B. Potong Stok Kemasan (Berdasarkan Resep Packing)
+            const { data: packRecipes } = await supabase.from('recipe_packagings')
+              .select('packaging_material_id, quantity_needed')
+              .eq('sku_id', item.sku_id);
+            
+            if (packRecipes && packRecipes.length > 0) {
+              for (const pr of packRecipes) {
+                await supabase.from('packaging_movements').insert({
+                  packaging_material_id: pr.packaging_material_id,
+                  movement_type: 'used',
+                  qty_change: -(Number(pr.quantity_needed) * item.quantity),
+                  order_id: orderData.id,
+                  note: `Packing TikTok: ${orderId}`
+                });
+              }
+            }
+          }
+        }
       }
     }
 
     // Selesai tanpa error
     await supabase.from('webhook_logs').update({ status: 'processed' }).eq('id', logId);
-
     return new NextResponse(null, { status: 200 });
 
   } catch (err: any) {
     console.error('Webhook Error:', err);
-    
-    // Tulis error asli ke database agar bisa dibaca di tabel webhook_logs
     if (logId) {
       await supabase.from('webhook_logs')
-        .update({ status: `CRASH: ${err.message.substring(0, 100)}` }) // Saya perpanjang jadi 100 karakter agar errornya lebih jelas
+        .update({ status: `CRASH: ${err.message.substring(0, 100)}` })
         .eq('id', logId);
     }
-    
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

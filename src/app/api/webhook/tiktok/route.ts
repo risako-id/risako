@@ -64,116 +64,108 @@ export async function POST(request: Request) {
       throw logError;
     }
 
-    if (orderStatus === 'READY_TO_SHIP' || orderStatus === 'AWAITING_COLLECTION' || orderStatus === 'AWAITING_SHIPMENT') {
+    // --- LOGIKA BARU: Hanya Proses AWAITING_COLLECTION ---
+    if (orderStatus !== 'AWAITING_COLLECTION') {
+      await supabase.from('webhook_logs').update({ status: `SKIP_STATUS: ${orderStatus}` }).eq('id', logData.id);
+      return new NextResponse(null, { status: 200 });
+    }
+
+    // Lanjut ke API TikTok karena statusnya sesuai
+    const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token, shop_cipher').limit(1).single();
+    if (!tokenData || !tokenData.shop_cipher) throw new Error("Token atau Shop Cipher tidak valid");
+
+    const path = '/order/202309/orders';
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const params: Record<string, string> = { app_key: appKey, timestamp: timestamp, ids: orderId, shop_cipher: tokenData.shop_cipher };
+
+    const sign = generateTikTokSignature(path, params, appSecret);
+    params.sign = sign;
+
+    const queryString = new URLSearchParams(params).toString();
+    const url = `https://open-api.tiktokglobalshop.com${path}?${queryString}`;
+
+    const orderDetailsResponse = await fetch(url, {
+      method: 'GET',
+      headers: { 'x-tts-access-token': tokenData.access_token, 'Content-Type': 'application/json' }
+    });
+
+    if (!orderDetailsResponse.ok) {
+      const errText = await orderDetailsResponse.text();
+      throw new Error(`Gagal ambil detail pesanan: ${errText}`);
+    }
+
+    const orderDetails = await orderDetailsResponse.json();
+    const orderDataAPI = orderDetails.data.orders[0];
+
+    if (!orderDataAPI) throw new Error("Data pesanan tidak ditemukan di API TikTok");
+
+    const lineItems = orderDataAPI.line_items || [];
+    
+    // Cek jika line items kosong
+    if (lineItems.length === 0) {
+      await supabase.from('webhook_logs').update({ status: 'ERROR_LINE_ITEMS_KOSONG' }).eq('id', logData.id);
+      return new NextResponse(null, { status: 200 });
+    }
+
+    const { data: platformData } = await supabase.from('platforms').select('id').eq('name', 'tiktok').single();
+    if (!platformData) throw new Error("Platform TikTok belum ada di database");
+
+    let { data: existingOrder } = await supabase.from('orders').select('id').eq('external_order_id', orderId).single();
+    let orderData = existingOrder;
+
+    if (!orderData) {
+      const { data: newOrder, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          store_id: '22222222-2222-2222-2222-222222222222',
+          platform_id: platformData.id,
+          external_order_id: orderId,
+          status: orderStatus,
+          total_amount: orderDataAPI.payment_info?.total_amount || 0
+        }).select().single();
+      if (orderError) throw orderError;
+      orderData = newOrder;
+    }
+
+    if (!orderData) throw new Error("Gagal membuat data pesanan");
+
+    for (const item of lineItems) {
+      const sellerSku = item.seller_sku || item.sku_id; 
+      const qty = item.quantity;
+
+      const { data: mappingData } = await supabase.from('channel_skus').select('sku_id').eq('external_sku_id', sellerSku).single();
       
-      const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token, shop_cipher').limit(1).single();
-      if (!tokenData) throw new Error("Token TikTok tidak ditemukan");
-      if (!tokenData.shop_cipher) throw new Error("Shop Cipher tidak ditemukan, silakan otorisasi ulang.");
+      if (!mappingData) {
+        await supabase.from('webhook_logs').update({ status: `ERROR_SKU: ${sellerSku}` }).eq('id', logData.id);
+        continue; 
+      }
 
-      const path = '/order/202309/orders';
-      const timestamp = Math.floor(Date.now() / 1000).toString();
-      
-      const params: Record<string, string> = {
-        app_key: appKey,
-        timestamp: timestamp,
-        ids: orderId,
-        shop_cipher: tokenData.shop_cipher, 
-      };
+      const { data: existingItem } = await supabase.from('order_items').select('id').eq('order_id', orderData.id).eq('external_sku_id', sellerSku).single();
+      if (existingItem) continue;
 
-      const sign = generateTikTokSignature(path, params, appSecret);
-      params.sign = sign;
-
-      const queryString = new URLSearchParams(params).toString();
-      const url = `https://open-api.tiktokglobalshop.com${path}?${queryString}`;
-
-      const orderDetailsResponse = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'x-tts-access-token': tokenData.access_token,
-          'Content-Type': 'application/json'
-        }
+      await supabase.from('order_items').insert({
+        order_id: orderData.id,
+        sku_id: mappingData.sku_id,
+        external_sku_id: sellerSku,
+        quantity: qty,
+        unit_price: item.sale_price || 0
       });
 
-      if (!orderDetailsResponse.ok) {
-        const errText = await orderDetailsResponse.text();
-        throw new Error(`Gagal mengambil detail pesanan: ${errText}`);
-      }
-
-      const orderDetails = await orderDetailsResponse.json();
-      const orderDataAPI = orderDetails.data.orders[0];
-
-      if (!orderDataAPI) throw new Error("Data pesanan tidak ditemukan di API TikTok");
-
-      const { data: platformData } = await supabase.from('platforms').select('id').eq('name', 'tiktok').single();
-      if (!platformData) throw new Error("Platform TikTok belum ada di database");
-
-      let { data: existingOrder } = await supabase.from('orders').select('id').eq('external_order_id', orderId).single();
-      let orderData = existingOrder;
-
-      if (!orderData) {
-        const { data: newOrder, error: orderError } = await supabase
-          .from('orders')
-          .insert({
-            store_id: '22222222-2222-2222-2222-222222222222',
-            platform_id: platformData.id,
-            external_order_id: orderId,
-            status: orderStatus,
-            total_amount: orderDataAPI.payment_info?.total_amount || 0
-          })
-          .select()
-          .single();
-        if (orderError) throw orderError;
-        orderData = newOrder;
-      }
-
-      if (!orderData) throw new Error("Gagal membuat data pesanan");
-
-      const lineItems = orderDataAPI.line_items || [];
-      for (const item of lineItems) {
-        // Kita gunakan seller_sku, jika kosong pakai sku_id
-        const sellerSku = item.seller_sku || item.sku_id; 
-        const qty = item.quantity;
-
-        const { data: mappingData } = await supabase.from('channel_skus').select('sku_id').eq('external_sku_id', sellerSku).single();
+      const { data: skuData } = await supabase.from('skus').select('stock_qty').eq('id', mappingData.sku_id).single();
+      if (skuData) {
+        const newStock = skuData.stock_qty - qty;
+        await supabase.from('skus').update({ stock_qty: newStock }).eq('id', mappingData.sku_id);
         
-        if (!mappingData) {
-          console.error(`Mapping SKU tidak ditemukan: ${sellerSku}`);
-          
-          // TRIK DEBUGGING: Tulis ID SKU yang gagal ke tabel webhook_logs
-          await supabase.from('webhook_logs')
-            .update({ status: `ERROR_SKU: ${sellerSku}` })
-            .eq('id', logData.id);
-            
-          continue; // Lanjut ke item berikutnya
-        }
-
-        const { data: existingItem } = await supabase.from('order_items').select('id').eq('order_id', orderData.id).eq('external_sku_id', sellerSku).single();
-        if (existingItem) continue;
-
-        await supabase.from('order_items').insert({
-          order_id: orderData.id,
+        await supabase.from('stock_movements').insert({
           sku_id: mappingData.sku_id,
-          external_sku_id: sellerSku,
-          quantity: qty,
-          unit_price: item.sale_price || 0
+          movement_type: 'OUT',
+          qty_change: -qty,
+          note: `Penjualan TikTok Order ID: ${orderId}`
         });
-
-        const { data: skuData } = await supabase.from('skus').select('stock_qty').eq('id', mappingData.sku_id).single();
-        if (skuData) {
-          const newStock = skuData.stock_qty - qty;
-          await supabase.from('skus').update({ stock_qty: newStock }).eq('id', mappingData.sku_id);
-          
-          await supabase.from('stock_movements').insert({
-            sku_id: mappingData.sku_id,
-            movement_type: 'OUT',
-            qty_change: -qty,
-            note: `Penjualan TikTok Order ID: ${orderId}`
-          });
-        }
       }
     }
 
-    // Hanya update ke 'processed' jika tidak terhenti di tengah jalan oleh ERROR_SKU
+    // Update log menjadi processed jika tidak terhenti oleh error SKU/kosong
     const { data: currentLog } = await supabase.from('webhook_logs').select('status').eq('id', logData.id).single();
     if (currentLog && currentLog.status === 'processing') {
       await supabase.from('webhook_logs').update({ status: 'processed' }).eq('id', logData.id);

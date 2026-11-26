@@ -2,16 +2,20 @@ import { supabaseServer } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
+// Next.js 15: searchParams sekarang bertipe Promise
 interface PageProps {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function PesananPage({ searchParams }: PageProps) {
+  // Await searchParams terlebih dahulu
+  const resolvedSearchParams = await searchParams;
+
   // 1. Tangkap nilai dari filter (jika ada)
-  const statusFilter = (searchParams.status as string) || "";
-  const startDate = (searchParams.startDate as string) || "";
-  const endDate = (searchParams.endDate as string) || "";
-  const searchId = (searchParams.searchId as string) || "";
+  const statusFilter = (resolvedSearchParams.status as string) || "";
+  const startDate = (resolvedSearchParams.startDate as string) || "";
+  const endDate = (resolvedSearchParams.endDate as string) || "";
+  const searchId = (resolvedSearchParams.searchId as string) || "";
 
   const allowedStatuses = [
     'AWAITING_COLLECTION', 
@@ -52,7 +56,6 @@ export default async function PesananPage({ searchParams }: PageProps) {
   // 3. Fungsi Format Tanggal ke WIB (Asia/Jakarta) & Format DD-MM-YYYY HH:mm
   const formatDate = (dateString: string) => {
     const d = new Date(dateString);
-    // Gunakan Intl dengan timeZone Asia/Jakarta
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'Asia/Jakarta',
       year: 'numeric', month: '2-digit', day: '2-digit',

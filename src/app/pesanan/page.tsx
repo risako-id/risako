@@ -23,12 +23,12 @@ export default async function PesananPage({ searchParams }: PageProps) {
     'CANCELLED'
   ];
 
-  // 1. Tambahkan platforms(name) di dalam select
+  // 1. Ubah platforms(name) menjadi stores(name)
   let query = supabaseServer
     .from("orders")
     .select(`
       id, external_order_id, status, created_at, total_amount,
-      platforms (name),
+      stores (name),
       order_items (quantity, skus (sku_code, products(name)))
     `)
     .in('status', allowedStatuses);
@@ -105,7 +105,7 @@ export default async function PesananPage({ searchParams }: PageProps) {
             <tr>
               <th>Waktu Siap Kirim</th>
               <th>ID Pesanan</th>
-              <th>Platform</th> {/* <-- KOLOM BARU */}
+              <th>Toko</th> {/* <-- UBAH JADI TOKO */}
               <th>Produk</th>
               <th>Qty</th>
               <th>Total Dibayar</th>
@@ -118,9 +118,9 @@ export default async function PesananPage({ searchParams }: PageProps) {
                 <td>{formatDate(o.created_at)}</td>
                 <td>{o.external_order_id}</td>
                 <td>
-                  {/* Tampilkan nama platform, ubah jadi huruf kapital di awal (Tiktok) */}
+                  {/* Tampilkan Nama Toko */}
                   <span style={{ fontWeight: 'bold' }}>
-                    {o.platforms ? (o.platforms as any).name : '-'}
+                    {o.stores ? (o.stores as any).name : '-'}
                   </span>
                 </td>
                 <td>

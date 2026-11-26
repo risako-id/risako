@@ -2,13 +2,10 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
-// Fungsi untuk membuat signature TikTok
 function generateTikTokSignature(path: string, params: Record<string, string>, appSecret: string): string {
   const sortedKeys = Object.keys(params).sort();
   let signString = appSecret + path;
-  for (const key of sortedKeys) {
-    signString += key + params[key];
-  }
+  for (const key of sortedKeys) { signString += key + params[key]; }
   signString += appSecret;
   return crypto.createHmac('sha256', appSecret).update(signString).digest('hex');
 }
@@ -30,7 +27,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Environment variables belum lengkap' }, { status: 500 });
   }
 
-  // 1. Tukar Code dengan Access Token
   const authUrl = new URL('https://auth.tiktok-shops.com/api/v2/token/get');
   authUrl.searchParams.append('app_key', appKey);
   authUrl.searchParams.append('app_secret', appSecret);
@@ -48,13 +44,9 @@ export async function GET(request: Request) {
     const tokenData = data.data;
     const accessToken = tokenData.access_token;
 
-    // 2. Ambil Shop Cipher menggunakan Access Token
     const path = '/authorization/202309/shops';
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const params: Record<string, string> = {
-      app_key: appKey,
-      timestamp: timestamp,
-    };
+    const params: Record<string, string> = { app_key: appKey, timestamp: timestamp };
     const sign = generateTikTokSignature(path, params, appSecret);
     
     const shopUrl = new URL(`https://open-api.tiktokglobalshop.com${path}`);
@@ -64,34 +56,33 @@ export async function GET(request: Request) {
 
     const shopResponse = await fetch(shopUrl.toString(), {
       method: 'GET',
-      headers: {
-        'x-tts-access-token': accessToken,
-        'Content-Type': 'application/json'
-      }
+      headers: { 'x-tts-access-token': accessToken, 'Content-Type': 'application/json' }
     });
 
     const shopData = await shopResponse.json();
     
-    // Jika gagal ambil shop, kita tetap simpan token tapi shop_cipher null
     let shopCipher = null;
     let shopId = tokenData.open_id;
     
     if (shopData.code === 0 && shopData.data.shops && shopData.data.shops.length > 0) {
       shopCipher = shopData.data.shops[0].cipher;
-      shopId = shopData.data.shops[0].id; // ID toko asli
-    } else {
-      console.error('Gagal mengambil shop_cipher:', shopData);
+      shopId = shopData.data.shops[0].id;
     }
 
-    // 3. Simpan ke Supabase
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    // CELAH/ASUMSI: Mengambil store pertama di ERP. 
+    // Nanti jika UI multi-toko sudah jadi, ini harus diganti dengan ID toko yang dipilih saat klik Connect.
+    const { data: defaultStore } = await supabase.from('stores').select('id').limit(1).single();
+
     const { error: dbError } = await supabase
       .from('tiktok_tokens')
       .upsert({
         shop_id: shopId, 
+        store_id: defaultStore?.id, // <-- MENYIMPAN STORE ID
         access_token: accessToken,
         refresh_token: tokenData.refresh_token,
-        shop_cipher: shopCipher, // Sekarang sudah berisi cipher asli
+        shop_cipher: shopCipher, 
         access_expires_at: new Date(Date.now() + tokenData.access_token_expire_in * 1000).toISOString(),
         refresh_expires_at: new Date(Date.now() + tokenData.refresh_token_expire_in * 1000).toISOString(),
         updated_at: new Date().toISOString(),

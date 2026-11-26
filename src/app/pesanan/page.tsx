@@ -2,16 +2,13 @@ import { supabaseServer } from "@/lib/supabase-server";
 
 export const dynamic = "force-dynamic";
 
-// Next.js 15: searchParams sekarang bertipe Promise
 interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function PesananPage({ searchParams }: PageProps) {
-  // Await searchParams terlebih dahulu
   const resolvedSearchParams = await searchParams;
 
-  // 1. Tangkap nilai dari filter (jika ada)
   const statusFilter = (resolvedSearchParams.status as string) || "";
   const startDate = (resolvedSearchParams.startDate as string) || "";
   const endDate = (resolvedSearchParams.endDate as string) || "";
@@ -26,34 +23,23 @@ export default async function PesananPage({ searchParams }: PageProps) {
     'CANCELLED'
   ];
 
-  // 2. Bangun Query Supabase
+  // 1. Tambahkan platforms(name) di dalam select
   let query = supabaseServer
     .from("orders")
     .select(`
       id, external_order_id, status, created_at, total_amount,
+      platforms (name),
       order_items (quantity, skus (sku_code, products(name)))
     `)
-    .in('status', allowedStatuses); // Wajib berstatus AWAITING_COLLECTION ke atas
+    .in('status', allowedStatuses);
 
-  // Terapkan filter status
-  if (statusFilter) {
-    query = query.eq('status', statusFilter);
-  }
-  // Terapkan filter tanggal
-  if (startDate) {
-    query = query.gte('created_at', `${startDate}T00:00:00Z`);
-  }
-  if (endDate) {
-    query = query.lte('created_at', `${endDate}T23:59:59Z`);
-  }
-  // Terapkan filter ID Pesanan
-  if (searchId) {
-    query = query.ilike('external_order_id', `%${searchId}%`);
-  }
+  if (statusFilter) query = query.eq('status', statusFilter);
+  if (startDate) query = query.gte('created_at', `${startDate}T00:00:00Z`);
+  if (endDate) query = query.lte('created_at', `${endDate}T23:59:59Z`);
+  if (searchId) query = query.ilike('external_order_id', `%${searchId}%`);
 
   const { data: orders } = await query.order("created_at", { ascending: false }).limit(50);
 
-  // 3. Fungsi Format Tanggal ke WIB (Asia/Jakarta) & Format DD-MM-YYYY HH:mm
   const formatDate = (dateString: string) => {
     const d = new Date(dateString);
     const parts = new Intl.DateTimeFormat('en-US', {
@@ -76,42 +62,22 @@ export default async function PesananPage({ searchParams }: PageProps) {
           
           <div>
             <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Cari ID Pesanan</label>
-            <input 
-              type="text" 
-              name="searchId" 
-              placeholder="Contoh: 5873..." 
-              defaultValue={searchId} 
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            />
+            <input type="text" name="searchId" placeholder="Contoh: 5873..." defaultValue={searchId} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Dari Tanggal</label>
-            <input 
-              type="date" 
-              name="startDate" 
-              defaultValue={startDate} 
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            />
+            <input type="date" name="startDate" defaultValue={startDate} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Sampai Tanggal</label>
-            <input 
-              type="date" 
-              name="endDate" 
-              defaultValue={endDate} 
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            />
+            <input type="date" name="endDate" defaultValue={endDate} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
           </div>
 
           <div>
             <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Status</label>
-            <select 
-              name="status" 
-              defaultValue={statusFilter}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
+            <select name="status" defaultValue={statusFilter} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
               <option value="">Semua Status</option>
               <option value="AWAITING_COLLECTION">Awaiting Collection</option>
               <option value="IN_TRANSIT">In Transit</option>
@@ -129,7 +95,6 @@ export default async function PesananPage({ searchParams }: PageProps) {
               Reset
             </a>
           </div>
-
         </form>
       </div>
 
@@ -140,6 +105,7 @@ export default async function PesananPage({ searchParams }: PageProps) {
             <tr>
               <th>Waktu Siap Kirim</th>
               <th>ID Pesanan</th>
+              <th>Platform</th> {/* <-- KOLOM BARU */}
               <th>Produk</th>
               <th>Qty</th>
               <th>Total Dibayar</th>
@@ -151,6 +117,12 @@ export default async function PesananPage({ searchParams }: PageProps) {
               <tr key={o.id}>
                 <td>{formatDate(o.created_at)}</td>
                 <td>{o.external_order_id}</td>
+                <td>
+                  {/* Tampilkan nama platform, ubah jadi huruf kapital di awal (Tiktok) */}
+                  <span style={{ fontWeight: 'bold' }}>
+                    {o.platforms ? (o.platforms as any).name : '-'}
+                  </span>
+                </td>
                 <td>
                   {o.order_items?.map((item: any, i: number) => (
                     <div key={i}>{item.skus?.products?.name} ({item.skus?.sku_code})</div>
@@ -167,7 +139,7 @@ export default async function PesananPage({ searchParams }: PageProps) {
             ))}
             {(!orders || orders.length === 0) && (
               <tr>
-                <td colSpan={6} style={{ textAlign: 'center', color: '#888', padding: '20px' }}>
+                <td colSpan={7} style={{ textAlign: 'center', color: '#888', padding: '20px' }}>
                   Tidak ada pesanan yang sesuai dengan filter.
                 </td>
               </tr>

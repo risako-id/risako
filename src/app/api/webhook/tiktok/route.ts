@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
+import { getValidTikTokToken } from '@/lib/tiktok'; // <-- Import fungsi helper
 
 function generateTikTokSignature(path: string, params: Record<string, string>, appSecret: string): string {
   const sortedKeys = Object.keys(params).sort();
@@ -35,7 +36,6 @@ export async function POST(request: Request) {
     if (!isValid) return new NextResponse('Invalid signature', { status: 401 });
 
     const payload = JSON.parse(rawBody);
-
     if (!payload.data || !payload.data.order_id) return new NextResponse(null, { status: 200 });
 
     const eventData = payload.data;
@@ -45,14 +45,12 @@ export async function POST(request: Request) {
 
     // --- FILTER STATUS: ABAIKAN UNPAID & AWAITING_SHIPMENT ---
     if (['UNPAID', 'AWAITING_SHIPMENT'].includes(orderStatus)) {
-      // Opsional: Catat di log sebagai SKIP agar kita tahu webhook masuk
       await supabase.from('webhook_logs').insert({ 
         external_event_id: payload.tts_notification_id || `skip-${orderId}-${Date.now()}`, 
         status: `SKIP_STATUS: ${orderStatus}` 
       });
       return new NextResponse(null, { status: 200 }); 
     }
-    // ---------------------------------------------------------
 
     if (!shopId) throw new Error("Shop ID tidak ditemukan di payload webhook");
 
@@ -70,17 +68,14 @@ export async function POST(request: Request) {
     
     logId = logData.id; 
 
-    // --- AMBIL TOKEN BERDASARKAN SHOP_ID ---
-    const { data: tokenData, error: tokenError } = await supabase
-      .from('tiktok_tokens')
-      .select('access_token, shop_cipher, store_id')
-      .eq('shop_id', shopId)
-      .single();
+    // --- PANGGIL FUNGSI AUTO-REFRESH TOKEN ---
+    const tokenData = await getValidTikTokToken(supabase, shopId, appKey, appSecret);
 
-    if (tokenError || !tokenData || !tokenData.shop_cipher || !tokenData.store_id) {
-      throw new Error(`Token/Store ID tidak valid untuk Shop ID: ${shopId}`);
+    if (!tokenData.shop_cipher || !tokenData.store_id) {
+      throw new Error(`Shop Cipher atau Store ID kosong untuk Shop ID: ${shopId}`);
     }
 
+    // --- LANJUTKAN PROSES SEPERTI BIASA ---
     const path = '/order/202507/orders'; 
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const params: Record<string, string> = { app_key: appKey, timestamp: timestamp, ids: orderId, shop_cipher: tokenData.shop_cipher };
@@ -173,7 +168,6 @@ export async function POST(request: Request) {
     }
 
     // --- POTONG STOK (HANYA UNTUK PESANAN BARU) ---
-    // Karena kita skip AWAITING_SHIPMENT, saat masuk ke sini berarti status awal adalah AWAITING_COLLECTION ke atas
     if (isNewOrder) {
         const { data: currentOrderItems } = await supabase.from('order_items').select('id, sku_id, quantity').eq('order_id', orderData.id);
         

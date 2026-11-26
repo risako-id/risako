@@ -31,7 +31,6 @@ export async function POST(request: Request) {
 
     if (!signatureHeader) return new NextResponse('Missing signature', { status: 401 });
 
-    // Validasi Signature Webhook TikTok
     const expectedSignature = crypto.createHmac('sha256', appSecret).update(appKey + rawBody).digest('hex');
     const isValid = crypto.timingSafeEqual(Buffer.from(signatureHeader || '', 'utf8'), Buffer.from(expectedSignature, 'utf8'));
 
@@ -43,9 +42,8 @@ export async function POST(request: Request) {
 
     const eventData = payload.data;
     const orderId = eventData.order_id;
-    const orderStatus = eventData.order_status; // Status dari webhook (misal: AWAITING_SHIPMENT, SHIPPED)
+    const orderStatus = eventData.order_status; 
 
-    // Mencegah duplikasi log webhook
     const notificationId = payload.tts_notification_id || `fallback-${orderId}-${Date.now()}`;
     const { data: logData, error: logError } = await supabase
       .from('webhook_logs')
@@ -54,17 +52,15 @@ export async function POST(request: Request) {
       .single();
 
     if (logError) {
-      if (logError.code === '23505') return new NextResponse(null, { status: 200 }); // Abaikan jika duplikat
+      if (logError.code === '23505') return new NextResponse(null, { status: 200 }); 
       throw logError;
     }
     
     logId = logData.id; 
 
-    // --- Ambil Token TikTok ---
     const { data: tokenData } = await supabase.from('tiktok_tokens').select('access_token, shop_cipher').limit(1).single();
     if (!tokenData || !tokenData.shop_cipher) throw new Error("Token atau Shop Cipher tidak valid");
 
-    // --- Panggil API TikTok Get Order Detail ---
     const path = '/order/202507/orders'; 
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const params: Record<string, string> = { app_key: appKey, timestamp: timestamp, ids: orderId, shop_cipher: tokenData.shop_cipher };
@@ -97,7 +93,6 @@ export async function POST(request: Request) {
       return new NextResponse(null, { status: 200 });
     }
 
-    // --- Cek Platform ---
     const { data: platformData } = await supabase.from('platforms').select('id').eq('name', 'tiktok').single();
     if (!platformData) throw new Error("Platform TikTok belum ada di database");
 
@@ -106,11 +101,10 @@ export async function POST(request: Request) {
     let orderData = existingOrder;
 
     if (!orderData) {
-      // Jika pesanan baru masuk
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
-          store_id: '22222222-2222-2222-2222-222222222222', // Sesuaikan jika multi-store
+          store_id: '22222222-2222-2222-2222-222222222222', 
           platform_id: platformData.id,
           external_order_id: orderId,
           status: orderStatus,
@@ -120,7 +114,6 @@ export async function POST(request: Request) {
       if (orderError) throw new Error(`Gagal insert order: ${orderError.message}`);
       orderData = newOrder;
     } else if (orderData.status !== orderStatus) {
-      // Jika pesanan sudah ada, tapi statusnya berubah
       const { error: updateOrderError } = await supabase
         .from('orders')
         .update({ status: orderStatus, updated_at: new Date().toISOString() })
@@ -128,6 +121,12 @@ export async function POST(request: Request) {
         
       if (updateOrderError) throw new Error(`Gagal update status order: ${updateOrderError.message}`);
     }
+
+    // --- INI TAMBAHAN UNTUK MEMPERBAIKI ERROR TYPESCRIPT VERCEL ---
+    if (!orderData) {
+      throw new Error("Gagal mendapatkan atau membuat data pesanan (orderData null)");
+    }
+    // -------------------------------------------------------------
 
     // --- 2. SIMPAN ITEM PESANAN ---
     for (const item of lineItems) {
@@ -159,7 +158,6 @@ export async function POST(request: Request) {
     const isReadyToShip = ['SHIPPED'].includes(orderStatus);
 
     if (isReadyToShip) {
-      // Cek apakah stok untuk pesanan ini sudah pernah dipotong sebelumnya
       const { data: checkMovement } = await supabase.from('stock_movements')
         .select('id')
         .like('note', `%${orderId}%`)
@@ -167,12 +165,10 @@ export async function POST(request: Request) {
         .maybeSingle();
 
       if (!checkMovement) {
-        // Ambil data item pesanan yang baru disimpan
         const { data: currentOrderItems } = await supabase.from('order_items').select('id, sku_id, quantity').eq('order_id', orderData.id);
         
         if (currentOrderItems) {
           for (const item of currentOrderItems) {
-            // A. Potong Stok Barang Jadi (Insert ke stock_movements)
             const { error: movementError } = await supabase.from('stock_movements').insert({
               sku_id: item.sku_id,
               movement_type: 'sale', 
@@ -183,7 +179,6 @@ export async function POST(request: Request) {
 
             if (movementError) throw new Error(`Gagal insert mutasi stok: ${movementError.message}`);
 
-            // B. Potong Stok Kemasan (Berdasarkan Resep Packing)
             const { data: packRecipes } = await supabase.from('recipe_packagings')
               .select('packaging_material_id, quantity_needed')
               .eq('sku_id', item.sku_id);
@@ -204,7 +199,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Selesai tanpa error
     await supabase.from('webhook_logs').update({ status: 'processed' }).eq('id', logId);
     return new NextResponse(null, { status: 200 });
 

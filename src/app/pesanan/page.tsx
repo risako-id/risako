@@ -1,4 +1,9 @@
 import { supabaseServer } from "@/lib/supabase-server";
+import TabNavigation from "@/components/pesanan/TabNavigation";
+import FilterLogistik from "@/components/pesanan/FilterLogistik";
+import OrderTable from "@/components/pesanan/OrderTable";
+import SaldoCard from "@/components/pesanan/SaldoCard";
+import SettledTable from "@/components/pesanan/SettledTable";
 
 export const dynamic = "force-dynamic";
 
@@ -8,145 +13,73 @@ interface PageProps {
 
 export default async function PesananPage({ searchParams }: PageProps) {
   const resolvedSearchParams = await searchParams;
+  const activeTab = (resolvedSearchParams.tab as string) || "logistik";
 
+  // Filter Logistik
   const statusFilter = (resolvedSearchParams.status as string) || "";
   const startDate = (resolvedSearchParams.startDate as string) || "";
   const endDate = (resolvedSearchParams.endDate as string) || "";
   const searchId = (resolvedSearchParams.searchId as string) || "";
 
-  const allowedStatuses = [
-    'AWAITING_COLLECTION', 
-    'IN_TRANSIT', 
-    'DELIVERED', 
-    'COMPLETED', 
-    'RETURNED', 
-    'CANCELLED'
-  ];
+  let orders: any[] = [];
+  let settlements: any[] = [];
+  let totalSettled = 0;
+  let totalWithdrawn = 0;
 
-  // 1. Ubah platforms(name) menjadi stores(name)
-  let query = supabaseServer
-    .from("orders")
-    .select(`
-      id, external_order_id, status, created_at, total_amount,
-      stores (name),
-      order_items (quantity, skus (sku_code, products(name)))
-    `)
-    .in('status', allowedStatuses);
+  // --- FETCHING DATA BERDASARKAN TAB ---
+  if (activeTab === "logistik") {
+    // Ambil semua status kecuali UNPAID & AWAITING_SHIPMENT
+    const allowedStatuses = ['AWAITING_COLLECTION', 'IN_TRANSIT', 'DELIVERED', 'COMPLETED', 'RETURNED', 'CANCELLED'];
 
-  if (statusFilter) query = query.eq('status', statusFilter);
-  if (startDate) query = query.gte('created_at', `${startDate}T00:00:00Z`);
-  if (endDate) query = query.lte('created_at', `${endDate}T23:59:59Z`);
-  if (searchId) query = query.ilike('external_order_id', `%${searchId}%`);
+    let query = supabaseServer
+      .from("orders")
+      .select(`id, external_order_id, status, created_at, total_amount, stores (name), order_items (quantity, skus (sku_code, products(name)))`)
+      .in('status', allowedStatuses);
 
-  const { data: orders } = await query.order("created_at", { ascending: false }).limit(50);
+    if (statusFilter) query = query.eq('status', statusFilter);
+    if (startDate) query = query.gte('created_at', `${startDate}T00:00:00Z`);
+    if (endDate) query = query.lte('created_at', `${endDate}T23:59:59Z`);
+    if (searchId) query = query.ilike('external_order_id', `%${searchId}%`);
 
-  const formatDate = (dateString: string) => {
-    const d = new Date(dateString);
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'Asia/Jakarta',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', hour12: false
-    }).formatToParts(d);
+    const { data } = await query.order("created_at", { ascending: false }).limit(50);
+    orders = data || [];
+  } 
+  else if (activeTab === "terbayar") {
+    // 1. Ambil data Settlements (Uang Masuk)
+    const { data } = await supabaseServer
+      .from("settlements")
+      .select(`id, net_amount, settled_at, orders (external_order_id, stores(name))`)
+      .order("settled_at", { ascending: false });
     
-    const getPart = (type: string) => parts.find(p => p.type === type)?.value;
-    return `${getPart('day')}-${getPart('month')}-${getPart('year')} ${getPart('hour')}:${getPart('minute')}`;
-  };
+    settlements = data || [];
+    totalSettled = settlements.reduce((sum, s) => sum + Number(s.net_amount), 0);
+
+    // 2. Ambil data Withdrawals (Uang Keluar)
+    const { data: withdrawals } = await supabaseServer.from("withdrawals").select("amount");
+    totalWithdrawn = withdrawals?.reduce((sum, w) => sum + Number(w.amount), 0) || 0;
+  }
+
+  const saldoVirtual = totalSettled - totalWithdrawn;
 
   return (
     <div>
       <h1>Pesanan Online</h1>
+      
+      <TabNavigation activeTab={activeTab} />
 
-      {/* UI FILTER */}
-      <div className="card" style={{ padding: '15px', marginTop: '20px', marginBottom: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <form method="GET" action="/pesanan" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', width: '100%', alignItems: 'flex-end' }}>
-          
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Cari ID Pesanan</label>
-            <input type="text" name="searchId" placeholder="Contoh: 5873..." defaultValue={searchId} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-          </div>
+      {activeTab === "logistik" && (
+        <>
+          <FilterLogistik searchId={searchId} startDate={startDate} endDate={endDate} statusFilter={statusFilter} />
+          <OrderTable orders={orders} />
+        </>
+      )}
 
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Dari Tanggal</label>
-            <input type="date" name="startDate" defaultValue={startDate} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Sampai Tanggal</label>
-            <input type="date" name="endDate" defaultValue={endDate} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }} />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', marginBottom: '5px' }}>Status</label>
-            <select name="status" defaultValue={statusFilter} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}>
-              <option value="">Semua Status</option>
-              <option value="AWAITING_COLLECTION">Awaiting Collection</option>
-              <option value="IN_TRANSIT">In Transit</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="RETURNED">Returned</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
-          </div>
-
-          <div>
-            <button type="submit" style={{ padding: '9px 15px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-              Terapkan Filter
-            </button>
-            <a href="/pesanan" style={{ padding: '9px 15px', marginLeft: '5px', background: '#e0e0e0', color: '#333', textDecoration: 'none', borderRadius: '4px', fontSize: '14px' }}>
-              Reset
-            </a>
-          </div>
-        </form>
-      </div>
-
-      {/* TABEL PESANAN */}
-      <div className="card" style={{ padding: 0 }}>
-        <table>
-          <thead>
-            <tr>
-              <th>Waktu Siap Kirim</th>
-              <th>ID Pesanan</th>
-              <th>Toko</th> {/* <-- UBAH JADI TOKO */}
-              <th>Produk</th>
-              <th>Qty</th>
-              <th>Total Dibayar</th>
-              <th>Status Logistik</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orders?.map((o) => (
-              <tr key={o.id}>
-                <td>{formatDate(o.created_at)}</td>
-                <td>{o.external_order_id}</td>
-                <td>
-                  {/* Tampilkan Nama Toko */}
-                  <span style={{ fontWeight: 'bold' }}>
-                    {o.stores ? (o.stores as any).name : '-'}
-                  </span>
-                </td>
-                <td>
-                  {o.order_items?.map((item: any, i: number) => (
-                    <div key={i}>{item.skus?.products?.name} ({item.skus?.sku_code})</div>
-                  ))}
-                </td>
-                <td>{o.order_items?.[0]?.quantity} pcs</td>
-                <td>Rp {Number(o.total_amount).toLocaleString('id-ID')}</td>
-                <td>
-                  <span style={{ background: '#fff3e0', color: '#e65100', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>
-                    {o.status}
-                  </span>
-                </td>
-              </tr>
-            ))}
-            {(!orders || orders.length === 0) && (
-              <tr>
-                <td colSpan={7} style={{ textAlign: 'center', color: '#888', padding: '20px' }}>
-                  Tidak ada pesanan yang sesuai dengan filter.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {activeTab === "terbayar" && (
+        <>
+          <SaldoCard saldoVirtual={saldoVirtual} totalWithdrawn={totalWithdrawn} />
+          <SettledTable settlements={settlements} />
+        </>
+      )}
     </div>
   );
 }
